@@ -116,13 +116,14 @@ class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
-
 class _LoginScreenState extends State<LoginScreen> {
   bool _isObscured = true;
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+
 
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
@@ -138,76 +139,67 @@ class _LoginScreenState extends State<LoginScreen> {
           body: jsonEncode({
             "Phone": phone,
             "Password": password,
-            "UserId": "" // السيرفر يطلبه كحقل إجباري
+            "UserId": ""
           }),
         );
 
-        logger.v("LOGIN_RESPONSE: Code ${response.statusCode} | Body: ${response.body}");
+        debugPrint("SERVER_RESPONSE: ${response.body}");
 
         if (response.statusCode == 200) {
-          final responseBody = jsonDecode(response.body);
-          Map<String, dynamic>? responseData;
-          final prefs = await SharedPreferences.getInstance();
+          final dynamic decodedBody = jsonDecode(response.body);
+          Map<String, dynamic> userData;
 
-          if (responseBody is List) {
-            // إذا كانت List، نأخذ العنصر الأول (المستخدم الأول)
-            if (responseBody.isNotEmpty) {
-              responseData = Map<String, dynamic>.from(responseBody[0] as Map);
+          // معالجة الـ List
+          if (decodedBody is List) {
+            if (decodedBody.isNotEmpty) {
+              userData = Map<String, dynamic>.from(decodedBody[0]);
             } else {
-              _showErrorSnackBar("لا يوجد مستخدم بهذه البيانات");
+              _showErrorSnackBar("لا يوجد مستخدم");
               return;
             }
-          } else if (responseBody is Map) {
-            // إذا كانت Map، نستخدمها مباشرة مع تحويل الأنواع
-            responseData = Map<String, dynamic>.from(responseBody);
           } else {
-            _showErrorSnackBar("استجابة غير صحيحة من السيرفر");
-            return;
+            userData = Map<String, dynamic>.from(decodedBody);
           }
 
-
-
-          await prefs.setString('loginData', jsonEncode(responseData));
+          // حفظ البيانات (مع التأكد إننا مش بنخزن Null يوقف البرنامج)
+          await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
+          await prefs.setString('student_id', userData['id']?.toString() ?? "");
+          await prefs.setString('loginData', jsonEncode(userData));
           await prefs.setBool('is_logged_in', true);
-          await prefs.setString('user_token', responseData!['token'] ?? "");
-          // حفظ student_id كـ string، واستخدام 'id' بدلاً من 'userId'
-          await prefs.setString('student_id', responseData['id']?.toString() ?? "");
-          if (responseData['data'] != null) {
-            await prefs.setString('student_id', responseData['data']['id']?.toString() ?? "");
+
+          // التوجيه (حتى لو userType مش موجود نعتبره طالب)
+          int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
+
+          Widget nextScreen;
+          if (userType == 1 || userType == 3) {
+            nextScreen = EmployeeHomeScreen();
+          } else if (userType == 2) {
+            nextScreen = TeacherHomeScreen();
+          } else {
+            nextScreen = StudentHomeScreen(loginData: userData);
           }
 
-          // استخدام 'userType' بدلاً من 'type'
-          final int userType = responseData['userType'] ?? 0;
-          String studentId = "";
-          Widget nextScreen;
-          if (userType == 2) {
-            nextScreen = TeacherHomeScreen();
-          } else if (userType == 1) {
-            nextScreen = EmployeeHomeScreen();
-          } else {
-            nextScreen = StudentHomeScreen(loginData: responseData);
-          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("تم تسجيل الدخول بنجاح"), backgroundColor: successGreen),
+              const SnackBar(content: Text("تم تسجيل الدخول بنجاح")),
             );
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => nextScreen));
-          }
 
-        } else if (response.statusCode == 401) {
-          _showErrorSnackBar("خطأ في الهاتف أو كلمة السر");
+            // استخدام pushReplacement لضمان الانتقال
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => nextScreen),
+            );
+          }
         } else {
-          _showErrorSnackBar("حدث خطأ ما: ${response.statusCode}");
+          _showErrorSnackBar("خطأ في السيرفر: ${response.statusCode}");
         }
       } catch (e) {
-        logger.e("LOGIN_ERROR: $e");
-        _showErrorSnackBar("خطأ في الاتصال بالسيرفر");
+        debugPrint("FATAL_ERROR: $e");
+        _showErrorSnackBar("حدث خطأ تقني، حاول مرة أخرى");
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
     }
   }
-
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),

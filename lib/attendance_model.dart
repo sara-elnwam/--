@@ -37,8 +37,8 @@ class Datum {
   String? createFrom;
   DateTime? createDate;
   int? groupId;
-  int? newAttendanceNote;
-  int? oldAttendanceNote;
+  dynamic newAttendanceNote; // تم التغيير لـ dynamic لاستقبال النصوص
+  dynamic oldAttendanceNote; // تم التغيير لـ dynamic لاستقبال النصوص
   String? note;
 
   Datum({
