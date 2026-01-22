@@ -382,6 +382,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           setState(() => _selectedIndex = index);
           _pageAnimationController.reset();
           _pageAnimationController.forward();
+
           if (index == 1) _fetchAttendance(studentFullData?['id']?.toString() ?? "");
         }
       },
