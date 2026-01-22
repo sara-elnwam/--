@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'student_home_screen.dart';
+import 'teacher_home_screen.dart';
+import 'employee_home_screen.dart';
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -14,7 +17,31 @@ const String baseUrl = 'https://nour-al-eman.runasp.net/api';
 
 var logger = Logger();
 
-void main() {
+void main() async { // لاحظي إضافة async هنا
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+  final bool isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+  final String? loginDataString = prefs.getString('loginData');
+
+  Widget initialScreen = LoginScreen();
+
+  if (isLoggedIn && loginDataString != null) {
+    try {
+      final Map<String, dynamic> responseData = jsonDecode(loginDataString);
+      final int userType = responseData['userType'] ?? 0;
+      if (userType == 2) {
+        initialScreen = TeacherHomeScreen();
+      } else if (userType == 1) {
+        initialScreen = EmployeeHomeScreen();
+      } else {
+        initialScreen = StudentHomeScreen(loginData: responseData);
+      }
+    } catch (e) {
+      initialScreen = LoginScreen();
+    }
+  }
+
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
@@ -29,7 +56,7 @@ void main() {
         titleTextStyle: TextStyle(color: Color(0xFF2E3542), fontSize: 18, fontWeight: FontWeight.bold),
       ),
     ),
-    home: LoginScreen(),
+    home: initialScreen,
   ));
 }
 
@@ -100,6 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
+      final prefs = await SharedPreferences.getInstance();
       try {
         final String phone = _phoneController.text.trim();
         final String password = _passwordController.text;
@@ -110,38 +138,81 @@ class _LoginScreenState extends State<LoginScreen> {
           body: jsonEncode({
             "Phone": phone,
             "Password": password,
-            "UserId": ""
+            "UserId": "" // السيرفر يطلبه كحقل إجباري
           }),
         );
 
         logger.v("LOGIN_RESPONSE: Code ${response.statusCode} | Body: ${response.body}");
 
         if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = jsonDecode(response.body);
+          final responseBody = jsonDecode(response.body);
+          Map<String, dynamic>? responseData;
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('user_token', responseData['token'] ?? "");
-          await prefs.setInt('user_id', responseData['userId'] ?? 0);
-          await prefs.setBool('is_logged_in', true);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("تم تسجيل الدخول بنجاح"), backgroundColor: successGreen),
-          );
+          if (responseBody is List) {
+            // إذا كانت List، نأخذ العنصر الأول (المستخدم الأول)
+            if (responseBody.isNotEmpty) {
+              responseData = Map<String, dynamic>.from(responseBody[0] as Map);
+            } else {
+              _showErrorSnackBar("لا يوجد مستخدم بهذه البيانات");
+              return;
+            }
+          } else if (responseBody is Map) {
+            // إذا كانت Map، نستخدمها مباشرة مع تحويل الأنواع
+            responseData = Map<String, dynamic>.from(responseBody);
+          } else {
+            _showErrorSnackBar("استجابة غير صحيحة من السيرفر");
+            return;
+          }
+
+
+
+          await prefs.setString('loginData', jsonEncode(responseData));
+          await prefs.setBool('is_logged_in', true);
+          await prefs.setString('user_token', responseData!['token'] ?? "");
+          // حفظ student_id كـ string، واستخدام 'id' بدلاً من 'userId'
+          await prefs.setString('student_id', responseData['id']?.toString() ?? "");
+          if (responseData['data'] != null) {
+            await prefs.setString('student_id', responseData['data']['id']?.toString() ?? "");
+          }
+
+          // استخدام 'userType' بدلاً من 'type'
+          final int userType = responseData['userType'] ?? 0;
+          String studentId = "";
+          Widget nextScreen;
+          if (userType == 2) {
+            nextScreen = TeacherHomeScreen();
+          } else if (userType == 1) {
+            nextScreen = EmployeeHomeScreen();
+          } else {
+            nextScreen = StudentHomeScreen(loginData: responseData);
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("تم تسجيل الدخول بنجاح"), backgroundColor: successGreen),
+            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => nextScreen));
+          }
+
+        } else if (response.statusCode == 401) {
+          _showErrorSnackBar("خطأ في الهاتف أو كلمة السر");
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("خطأ في الهاتف أو كلمة السر"), backgroundColor: Colors.red),
-          );
+          _showErrorSnackBar("حدث خطأ ما: ${response.statusCode}");
         }
       } catch (e) {
         logger.e("LOGIN_ERROR: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("خطأ في الاتصال بالسيرفر"), backgroundColor: Colors.red),
-        );
+        _showErrorSnackBar("خطأ في الاتصال بالسيرفر");
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     }
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -315,8 +386,21 @@ Future<void> _handleRegistration({
     logger.v("API_RESPONSE: Code ${response.statusCode} | Body: ${response.body}");
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => SuccessScreen()));
-    } else {
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        String userIdFromResponse = responseData['userId'].toString();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_token', responseData['token'] ?? "");
+        await prefs.setString('student_id', responseData['userId']?.toString() ?? "");
+        await prefs.setString('registered_user_id', userIdFromResponse);
+        // حفظ كامل البيانات ليتمكن التطبيق من قراءتها عند الفتح مرة أخرى
+        await prefs.setString(
+            'loginData', jsonEncode(responseData)); // <--- إضافة هذا السطر
+        await prefs.setBool('is_logged_in', true);
+        Navigator.push(
+            context, MaterialPageRoute(builder: (context) => SuccessScreen()));
+      }
+    }else {
       logger.e("API_ERROR: ${response.statusCode} | Body: ${response.body}");
 
       String displayError = "فشل التسجيل: تفقد البيانات المدخلة";
@@ -379,7 +463,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     "مضيفة نافع": 6,
     "مكتب الموقف": 7,
   };
-
   void _registerStudent() async {
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
@@ -397,7 +480,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         "name": _nameController.text.trim(),
         "phone": _phoneController.text.trim().isEmpty ? "00000000000" : _phoneController.text.trim(),
         "address": _addressController.text.trim(),
-        "parentJob": _parentJobController.text.trim(),
+        "ParentJob": _parentJobController.text.trim(),  // تغيير إلى ParentJob (حرف كبير)
         "email": _emailController.text.trim(),
         "governmentSchool": _schoolController.text.trim(),
         "attendanceType": _selectedAttendance ?? "أوفلاين",
@@ -405,12 +488,13 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         "locId": locationMap[_selectedLocation] ?? 1,
         "phone2": _parentPhoneController.text.trim(),
         "ssn": "",
-        "type": 1, // 0 للطالب
-        "employeeTypeId": 3, // تعديل: إرسال null بدلاً من 1 لحل مشكلة السيرفر في حساب الطالب
+        "employeeTypeId": 0,  // 0 للطالب (ليس null، ليتم تصنيفه صحيحًا)
         "educationDegree": "",
-        "password": _passwordController.text
+        "Password": _passwordController.text,  // تغيير إلى Password (حرف كبير)
+        // joinDate: DateTime.now().toIso8601String(),  // أضفه إذا لزم الأمر، لكن السيرفر ربما يضيفه تلقائيًا
       };
 
+      logger.i("SENDING STUDENT DATA: ${jsonEncode(studentData)}");
       await _handleRegistration(context: context, data: studentData);
       if (mounted) setState(() => _isLoading = false);
     }
@@ -480,6 +564,7 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
     "محاسب": 3,
   };
 
+
   void _registerEmployee() async {
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
@@ -491,27 +576,33 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
 
       setState(() => _isLoading = true);
 
+      int empTypeId = jobTypeMap[_selectedJobTitle] ?? 1;
+      int userType = (empTypeId == 1) ? 2 : 1;  // إذا معلم (1)، type=2؛ إلا ذلك، type=1
+
       Map<String, dynamic> employeeData = {
         "name": _nameController.text.trim(),
         "phone": _phoneController.text.trim(),
-        "address": "",
-        "parentJob": "",
+        "address": "",  // فارغ كما في السيرفر
+        "ParentJob": "",  // فارغ كما في السيرفر
         "email": _emailController.text.trim(),
-        "governmentSchool": "",
-        "attendanceType": "",
-        "birthDate": DateTime.now().toIso8601String(),
+        "governmentSchool": "",  // فارغ كما في السيرفر
+        "attendanceType": "",  // فارغ كما في السيرفر
+        "birthDate": DateTime.now().toIso8601String(),  // افتراضي كما في السيرفر
         "locId": locationMap[_selectedLocation] ?? 1,
-        "phone2": "",
+        "phone2": "",  // فارغ كما في السيرفر
         "ssn": _ssnController.text.trim(),
-        "type": 1, // 1 للموظف
-        "employeeTypeId": jobTypeMap[_selectedJobTitle] ?? 1,
+        "employeeTypeId": empTypeId,  // 1=معلم، 2=إدارة، 3=محاسب
         "educationDegree": _eduController.text.trim(),
-        "password": _passwordController.text
+        "Password": _passwordController.text,  // Password بحرف كبير
+        "type": userType,  // 2 للمعلمين، 1 للإدارة/محاسبين
+        // joinDate: DateTime.now().toIso8601String(),  // أضفه إذا لزم الأمر
       };
 
+      logger.i("SENDING EMPLOYEE DATA: ${jsonEncode(employeeData)}");
       await _handleRegistration(context: context, data: employeeData);
       if (mounted) setState(() => _isLoading = false);
     }
+
   }
 
   @override

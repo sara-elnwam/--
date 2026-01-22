@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
-void main() {
+import 'student_home_screen.dart';
+import 'teacher_home_screen.dart';
+import 'employee_home_screen.dart';
+import '../login_screen.dart';
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -40,41 +47,29 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _floatingAnimation;
-  double _logoOpacity = 0.0;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(seconds: 1),
       vsync: this,
-    )..repeat(reverse: true);
-
-    _floatingAnimation = Tween<double>(begin: -15, end: 15).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 1500),
     );
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) setState(() => _logoOpacity = 1.0);
-    });
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
 
+    // تم استخدام easeOutBack لضمان التوافق التام ومنع الخطأ
+    _scaleAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
 
-
-
-
-
-
-
-    Timer(const Duration(seconds: 4), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
-        );
-      }
-    });
+    _controller.forward();
+    _checkLoginStatus();
   }
 
   @override
@@ -83,56 +78,66 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  Future<void> _checkLoginStatus() async {
+    await Future.delayed(const Duration(seconds: 3));
+
+    final prefs = await SharedPreferences.getInstance();
+    final bool isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+    final String? loginDataString = prefs.getString('loginData');
+
+    if (isLoggedIn && loginDataString != null) {
+      try {
+        final Map<String, dynamic> responseData = jsonDecode(loginDataString);
+        final int userType = responseData['userType'] ?? responseData['type'] ?? 0;
+        Widget nextScreen;
+        if (userType == 2) {
+          nextScreen = TeacherHomeScreen();
+        } else if (userType == 1) {
+          nextScreen = EmployeeHomeScreen();
+        } else {
+          nextScreen = StudentHomeScreen(loginData: responseData);
+        }
+
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => nextScreen));
+        }
+      } catch (e) {
+        _navigateToLogin();
+      }
+    } else {
+      _navigateToLogin();
+    }
+  }
+
+  void _navigateToLogin() {
+    if (mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _floatingAnimation,
-              builder: (context, child) {
-                double shadowSize = 130 - (_floatingAnimation.value * 2);
-                return Transform.translate(
-                  offset: const Offset(0, 70),
-                  child: Container(
-                    width: shadowSize,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 25,
-                          spreadRadius: 1,
-                        )
-                      ],
-                    ),
-                  ),
-                );
-              },
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // حجم اللوجو الآن 15% من عرض الشاشة (تصغير إضافي كما طلبتِ)
+                Image.asset(
+                  'assets/full_logo.png',
+                  width: MediaQuery.of(context).size.width * 0.15,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.image, size: 25, color: Color(0xFFC66422)),
+                ),
+              ],
             ),
-
-            AnimatedBuilder(
-              animation: _floatingAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _floatingAnimation.value),
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 1500),
-                    opacity: _logoOpacity,
-                    child: Image.asset(
-                      'assets/full_logo.png',
-                      width: 280,
-                      filterQuality: FilterQuality.high,
-                      isAntiAlias: true,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
