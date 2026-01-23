@@ -33,9 +33,12 @@ dependencies:
   logger: ^2.5.0
   shared_preferences: ^2.2.2
   dio: ^5.4.0
+  flutter_pdfview: ^1.3.2
+  path_provider: ^2.1.2
+
   flutter:
     sdk: flutter
-  url_launcher: ^6.3.1  # أضف هذا السطر
+  url_launcher: ^6.1.11  # أضف هذا السطر
   cupertino_icons: ^1.0.8
 
   # عدلي السطرين دول كدة بالظبط

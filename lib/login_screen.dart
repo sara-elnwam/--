@@ -190,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else {
-          _showErrorSnackBar("خطأ في السيرفر: ${response.statusCode}");
+          _showErrorSnackBar("كلمة مرور أو رقم هاتف غير صحيح: ${response.statusCode}");
         }
       } catch (e) {
         debugPrint("FATAL_ERROR: $e");
