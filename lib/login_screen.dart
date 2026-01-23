@@ -17,7 +17,7 @@ const String baseUrl = 'https://nour-al-eman.runasp.net/api';
 
 var logger = Logger();
 
-void main() async { // لاحظي إضافة async هنا
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final prefs = await SharedPreferences.getInstance();
@@ -29,15 +29,18 @@ void main() async { // لاحظي إضافة async هنا
   if (isLoggedIn && loginDataString != null) {
     try {
       final Map<String, dynamic> responseData = jsonDecode(loginDataString);
-      final int userType = responseData['userType'] ?? 0;
+      // استخدام tryParse لضمان عدم حدوث خطأ إذا كانت القيمة نصية أو نل
+      final int userType = int.tryParse(responseData['userType']?.toString() ?? "0") ?? 0;
+
       if (userType == 2) {
         initialScreen = TeacherHomeScreen();
-      } else if (userType == 1) {
+      } else if (userType == 1 || userType == 3) {
         initialScreen = EmployeeHomeScreen();
       } else {
         initialScreen = StudentHomeScreen(loginData: responseData);
       }
     } catch (e) {
+      debugPrint("Error decoding login data: $e");
       initialScreen = LoginScreen();
     }
   }
@@ -380,6 +383,7 @@ Future<void> _handleRegistration({
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
+        responseData['userType'] = data['type'];
         String userIdFromResponse = responseData['userId'].toString();
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_token', responseData['token'] ?? "");
@@ -505,7 +509,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         _buildInputField("وظيفة الأب", "وظيفة الأب", isRequired: false, controller: _parentJobController),
         _buildDropdownField("المكتب التابع له", locationMap.keys.toList(), onChanged: (val) => _selectedLocation = val),
         _buildInputField("العنوان", "العنوان", controller: _addressController),
-        _buildInputField("البريد الإلكتروني", "example@mail.com", isRequired: true, controller: _emailController),
+        _buildInputField("البريد الإلكتروني", "example@mail.com", isRequired: false, controller: _emailController),
         _buildBirthdayRow(dayCtrl: _dayController, monthCtrl: _monthController, yearCtrl: _yearController),
         _buildInputField("رقم هاتف ولي الأمر", "01xxxxxxxxx", isPhone: true, isRequired: true, controller: _parentPhoneController),
         _buildInputField("رقم الهاتف (اختياري)", "01xxxxxxxxx", isPhone: true, isRequired: false, controller: _phoneController),
@@ -528,7 +532,8 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
   bool _isPasswordObscured = true;
   bool _isConfirmObscured = true;
   bool _isLoading = false;
-
+  List<PlatformFile>? _selectedFiles; // لتخزين الملفات المختارة
+  String _fileNames = "لم يتم اختيار ملفات"; // نص يعرض أسماء الملفات
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _ssnController = TextEditingController();
@@ -569,8 +574,12 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
       setState(() => _isLoading = true);
 
       int empTypeId = jobTypeMap[_selectedJobTitle] ?? 1;
-      int userType = (empTypeId == 1) ? 2 : 1;  // إذا معلم (1)، type=2؛ إلا ذلك، type=1
-
+      int userType;
+      if (empTypeId == 1) {
+        userType = 1; // جرب تغيير هذه لـ 2 إذا كان السيرفر يعتبر المعلم 2 في جدول المستخدمين
+      } else {
+        userType = 2; // الموظفين الإداريين
+      }
       Map<String, dynamic> employeeData = {
         "name": _nameController.text.trim(),
         "phone": _phoneController.text.trim(),
@@ -596,7 +605,20 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
     }
 
   }
+  Future<void> _pickFiles() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      allowMultiple: true, // للسماح برفع أكثر من دورة/ملف
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+    );
 
+    if (result != null) {
+      setState(() {
+        _selectedFiles = result.files;
+        _fileNames = result.files.map((f) => f.name).join(', ');
+      });
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return _BaseRegistrationScreen(
@@ -611,9 +633,44 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
         _buildInputField("الرقم القومي", "14 رقم", controller: _ssnController),
         _buildDropdownField("المكتب التابع له", locationMap.keys.toList(), onChanged: (val) => _selectedLocation = val),
         _buildInputField("المؤهل الدراسي", "المؤهل", controller: _eduController),
-        _buildInputField("البريد الإلكتروني", "example@staff.com", isRequired: true, controller: _emailController),
-        _buildDropdownField("المسمى الوظيفي", jobTypeMap.keys.toList(),
-            onChanged: (val) => setState(() => _selectedJobTitle = val)),
+        _buildInputField("البريد الإلكتروني", "example@staff.com", isRequired: false, controller: _emailController),
+        _buildDropdownField(
+          "المسمى الوظيفي",
+          jobTypeMap.keys.toList(),
+          onChanged: (val) => setState(() => _selectedJobTitle = val),
+        ),
+
+        // إظهار حقل رفع الملفات فقط إذا كان المستخدم "معلم/معلمة"
+        if (_selectedJobTitle == "معلم/معلمة")
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, top: 16),
+                child: Text("الدورات الخاصة بك", style: TextStyle(fontSize: 14, color: darkBlue, fontWeight: FontWeight.w600)),
+              ),
+              InkWell(
+                onTap: _pickFiles,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300)
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_upload_outlined, color: primaryOrange),
+                      SizedBox(width: 12),
+                      Expanded(child: Text(_fileNames, style: TextStyle(color: Colors.grey.shade600, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                      Text("اختيار ملفات", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
         _buildInputField("كلمة السر", "كلمة السر", isPassword: true, isObscured: _isPasswordObscured, onToggle: () => setState(() => _isPasswordObscured = !_isPasswordObscured), controller: _passwordController),
         _buildInputField("تأكيد كلمة السر", "تأكيد كلمة السر", isPassword: true, isObscured: _isConfirmObscured, onToggle: () => setState(() => _isConfirmObscured = !_isConfirmObscured), controller: _confirmPasswordController),
       ],
