@@ -32,7 +32,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   Map<String, dynamic>? studentFullData;
   List<dynamic> attendanceList = [];
 
-  late AnimationController _pageAnimationController; // تم إبقاء واحدة فقط
+  late AnimationController _pageAnimationController;
+  late Animation<Offset> _slideAnimation;
 
   List<dynamic> examsList = [];
   bool _isExamsLoading = false;
@@ -45,8 +46,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     super.initState();
     _pageAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 500),
     );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0.05, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _pageAnimationController,
+      curve: Curves.easeOutCubic,
+    ));
+
     _loadInitialData();
   }
 
@@ -196,7 +206,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
         drawer: _buildWebSidebar(),
         body: FadeTransition(
           opacity: _pageAnimationController,
-          child: _getPage(_selectedIndex),
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: _getPage(_selectedIndex),
+          ),
         ),
       ),
     );
@@ -206,7 +219,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
   Widget _getPage(int index) {
     switch (index) {
-      case 0: return _buildProfileTab(); // تم تغيير الاسم هنا ليتطابق مع الميثود
+      case 0: return _buildProfileTab();
       case 1: return _buildAttendanceTab();
       case 2: return StudentCoursesWidget(coursesList: coursesList, isLoading: _isCoursesLoading);
       case 4: return StudentExamsWidget(examsList: examsList, isLoading: _isExamsLoading);
@@ -227,10 +240,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     }
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       children: [
-        const Text("البيانات الشخصية", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextDark)),
-        const SizedBox(height: 15),
+        const Padding(
+          padding: EdgeInsets.only(right: 4, bottom: 10),
+          child: Text("البيانات الشخصية", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kTextDark)),
+        ),
         _buildInfoBox("بيانات الطالب", Icons.person_outline, [
           _infoRow("اسم الطالب :", data?['name'] ?? "---"),
           _infoRow("كود الطالب :", data?['id']?.toString() ?? "---"),
@@ -321,36 +336,37 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
                             ),
                           ),
                         ),
-                        AnimatedContainer(
+                        AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          height: isExpanded ? null : 0,
-                          width: double.infinity,
-                          color: kSecondaryBlue.withOpacity(0.4),
-                          child: isExpanded
-                              ? Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.info_outline, color: kPrimaryBlue, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text("تعليق المعلم: ${record['note'] ?? 'لا يوجد تعليق'}", style: const TextStyle(fontSize: 12, color: kPrimaryBlue, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Text("التقييم: ${record['points'] ?? 0} نقاط", style: const TextStyle(fontSize: 11, color: kTextDark)),
-                                    ],
+                          child: Container(
+                            width: double.infinity,
+                            color: kSecondaryBlue.withOpacity(0.4),
+                            child: isExpanded
+                                ? Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.info_outline, color: kPrimaryBlue, size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text("تعليق المعلم: ${record['note'] ?? 'لا يوجد تعليق'}", style: const TextStyle(fontSize: 12, color: kPrimaryBlue, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 4),
+                                        Text("التقييم: ${record['points'] ?? 0} نقاط", style: const TextStyle(fontSize: 11, color: kTextDark)),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                IconButton(icon: const Icon(Icons.close, color: kDangerRed, size: 16), onPressed: () => setState(() => expandedRowIndex = null)),
-                              ],
-                            ),
-                          )
-                              : const SizedBox.shrink(),
+                                  IconButton(icon: const Icon(Icons.close, color: kDangerRed, size: 16), onPressed: () => setState(() => expandedRowIndex = null)),
+                                ],
+                              ),
+                            )
+                                : const SizedBox(width: double.infinity, height: 0),
+                          ),
                         ),
                       ],
                     );
@@ -366,18 +382,18 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
   Widget _buildInfoBox(String title, IconData icon, List<Widget> rows) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: kBorderColor)),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorderColor)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, color: kPrimaryBlue, size: 22),
-            const SizedBox(width: 10),
-            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kPrimaryBlue))
+            Icon(icon, color: kPrimaryBlue, size: 20),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kPrimaryBlue))
           ]),
-          const Divider(height: 25),
+          const Divider(height: 20),
           ...rows,
         ],
       ),
@@ -386,12 +402,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 13)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(value, style: const TextStyle(color: kTextDark, fontWeight: FontWeight.w600, fontSize: 13))),
+          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 12)),
+          const SizedBox(width: 6),
+          Expanded(child: Text(value, style: const TextStyle(color: kTextDark, fontWeight: FontWeight.w600, fontSize: 12))),
         ],
       ),
     );
@@ -401,21 +417,33 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     return Drawer(
       child: Container(
         color: Colors.white,
-        child: Column(children: [
-          const SizedBox(height: 60),
-          Image.asset('assets/full_logo.png', height: 90, errorBuilder: (c, e, s) => const Icon(Icons.school, size: 70, color: kPrimaryBlue)),
-          const SizedBox(height: 20),
-          Text(studentFullData?['name'] ?? "اسم الطالب", style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue)),
-          const Divider(height: 40),
-          _drawerItem(0, Icons.person_outline, "البيانات الشخصية"),
-          _drawerItem(1, Icons.calendar_today_outlined, "حضور و غياب للمستوى الحالي"),
-          _drawerItem(2, Icons.book_outlined, "مقررات المستوي"),
-          _drawerItem(3, Icons.assignment_outlined, "أعمال الطالب"),
-          _drawerItem(4, Icons.quiz_outlined, "الاختبارات"),
-          const Spacer(),
-          _drawerItem(5, Icons.logout, "تسجيل الخروج", isLogout: true),
-          const SizedBox(height: 80),
-        ]),
+        child: SingleChildScrollView( // حل مشكلة الـ RenderFlex Overflow
+          child: Column(
+            children: [
+              const SizedBox(height: 60),
+              Image.asset('assets/full_logo.png', height: 80, errorBuilder: (c, e, s) => const Icon(Icons.school, size: 60, color: kPrimaryBlue)),
+              const SizedBox(height: 15),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  studentFullData?['name'] ?? "اسم الطالب",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue, fontSize: 14),
+                ),
+              ),
+              const Divider(height: 30),
+              _drawerItem(0, Icons.person_outline, "البيانات الشخصية"),
+              _drawerItem(1, Icons.calendar_today_outlined, "حضور و غياب للمستوى الحالي"),
+              _drawerItem(2, Icons.book_outlined, "مقررات المستوي"),
+              _drawerItem(3, Icons.assignment_outlined, "أعمال الطالب"),
+              _drawerItem(4, Icons.quiz_outlined, "الاختبارات"),
+              const SizedBox(height: 20), // بدلاً من Spacer لتجنب أخطاء السكرول
+              const Divider(),
+              _drawerItem(5, Icons.logout, "تسجيل الخروج", isLogout: true),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -431,7 +459,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
         style: TextStyle(
           color: isLogout ? kDangerRed : (isSelected ? kPrimaryBlue : kTextDark),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 14,
+          fontSize: 13,
         ),
       ),
       onTap: () {
@@ -439,13 +467,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           _forceLogout();
         } else {
           Navigator.pop(context);
-          setState(() => _selectedIndex = index);
-          _pageAnimationController.reset();
-          _pageAnimationController.forward();
-          String studentId = studentFullData?['id']?.toString() ?? "";
-          if (index == 1) _fetchAttendance(studentId);
-          else if (index == 2) _fetchCourses();
-          else if (index == 4) _fetchExams(studentId);
+          if (_selectedIndex != index) {
+            setState(() => _selectedIndex = index);
+            _pageAnimationController.reset();
+            _pageAnimationController.forward();
+            String studentId = studentFullData?['id']?.toString() ?? "";
+            if (index == 1) _fetchAttendance(studentId);
+            else if (index == 2) _fetchCourses();
+            else if (index == 4) _fetchExams(studentId);
+          }
         }
       },
     );
