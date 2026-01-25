@@ -39,6 +39,7 @@ dependencies:
   flutter_downloader: ^1.11.6
   url_launcher: ^6.2.5
   open_filex: ^4.4.0
+  http_parser: ^4.0.2
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
