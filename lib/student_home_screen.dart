@@ -46,6 +46,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   // قائمة أعمال الطالب وحالة التحميل
   List<dynamic> studentTasksList = [];
   bool _isTasksLoading = false;
+  String? _taskErrorMessage;
 
   int? _expandedIndex;
 
@@ -72,6 +73,32 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   void dispose() {
     _pageAnimationController.dispose();
     super.dispose();
+  }
+
+  // --- دالة اختبار الـ Endpoints ---
+  // تقوم هذه الدالة بطباعة حالة كافة الروابط في الـ Console للتأكد من أنها تعمل
+  Future<void> testAllEndpoints() async {
+    String stId = studentFullData?['id']?.toString() ?? "5";
+    String levelId = studentFullData?['levelId']?.toString() ?? "1";
+
+    List<Map<String, String>> endpoints = [
+      {'name': 'Profile', 'url': '$baseUrl/Student/GetById?id=$stId'},
+      {'name': 'Attendance', 'url': '$baseUrl/Student/GetAttendaceByStudentId?id=$stId'},
+      {'name': 'Tasks (Type 1)', 'url': '$baseUrl/Student/GetAllTasksBsedOnType?stId=$stId&levelId=$levelId&typeId=1'},
+      {'name': 'Tasks (Type 2)', 'url': '$baseUrl/Student/GetAllTasksBsedOnType?stId=$stId&levelId=$levelId&typeId=2'},
+      {'name': 'Exams', 'url': '$baseUrl/Student/GetExam?id=$stId'},
+    ];
+
+    print("--- 🔍 Testing Endpoints Status ---");
+    for (var ep in endpoints) {
+      try {
+        final res = await http.get(Uri.parse(ep['url']!));
+        print("✅ ${ep['name']}: Status ${res.statusCode} | Data: ${res.body.substring(0, res.body.length > 50 ? 50 : res.body.length)}...");
+      } catch (e) {
+        print("❌ ${ep['name']}: Failed | Error: $e");
+      }
+    }
+    print("-----------------------------------");
   }
 
   // --- دالات المساعدة ---
@@ -105,6 +132,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     }
 
     await _fetchStudentProfile(id, token);
+    await testAllEndpoints(); // تشغيل اختبار الروابط عند البداية
     _pageAnimationController.forward();
   }
 
@@ -130,35 +158,43 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     }
   }
 
-  // دالة جلب أعمال الطالب - مُحدثة لمعالجة الـ null
+  // دالة جلب أعمال الطالب - مُحدثة لجلب النوعين 1 و 2 معاً
   Future<void> _fetchStudentTasks() async {
-    setState(() => _isTasksLoading = true);
+    setState(() {
+      _isTasksLoading = true;
+      _taskErrorMessage = null;
+    });
     try {
       String stId = studentFullData?['id']?.toString() ?? "";
       String levelId = studentFullData?['levelId']?.toString() ?? "1";
- final url = '$baseUrl/Student/GetAllTasksBsedOnType?stId=$stId&levelId=$levelId&typeId=2';
-      debugPrint("جاري الاتصال بالرابط: $url");
 
-      final response = await http.get(Uri.parse(url));
+      // جلب بيانات النوعين 1 و 2 في وقت واحد لضمان ظهور كل شيء
+      final responses = await Future.wait([
+        http.get(Uri.parse('$baseUrl/Student/GetAllTasksBsedOnType?stId=$stId&levelId=$levelId&typeId=1')),
+        http.get(Uri.parse('$baseUrl/Student/GetAllTasksBsedOnType?stId=$stId&levelId=$levelId&typeId=2')),
+      ]);
 
-      debugPrint("كود استجابة أعمال الطالب: ${response.statusCode}");
-      debugPrint("البيانات المستلمة: ${response.body}");
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        setState(() {
-          // حل مشكلة الـ null: إذا كانت الـ data فارغة في السيرفر نجعل القائمة فارغة في التطبيق
-          studentTasksList = responseData['data'] != null ? responseData['data'] as List : [];
-        });
+      List<dynamic> allTasks = [];
+      for (var response in responses) {
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['data'] != null && data['data'] is List) {
+            allTasks.addAll(data['data']);
+          }
+        }
       }
+
+      setState(() {
+        studentTasksList = allTasks;
+      });
     } catch (e) {
-      debugPrint("حدث خطأ أثناء جلب المهام: $e");
+      setState(() => _taskErrorMessage = "حدث خطأ أثناء جلب المهام. يرجى التأكد من الاتصال.");
     } finally {
       if (mounted) setState(() => _isTasksLoading = false);
     }
   }
 
-  // دالة رفع الملفات (Upload File) المرتبطة بالزر
+  // دالة رفع الملفات
   Future<void> _uploadTaskFile(int taskId) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -188,10 +224,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
         ));
 
         var response = await request.send();
-        var responseData = await response.stream.bytesToString();
-
-        debugPrint("استجابة الرفع: $responseData");
-
         if (response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("تم رفع الملف بنجاح"), backgroundColor: kSuccessGreen),
@@ -204,22 +236,20 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
         }
       }
     } catch (e) {
-      debugPrint("خطأ في الرفع: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("حدث خطأ أثناء اختيار أو رفع الملف"), backgroundColor: kDangerRed),
+        const SnackBar(content: Text("حدث خطأ أثناء رفع الملف"), backgroundColor: kDangerRed),
       );
     }
   }
 
+  // بقية دوال الجلب (Exams, Courses, Attendance)
   Future<void> _fetchExams(String id) async {
     setState(() => _isExamsLoading = true);
     try {
       final response = await http.get(Uri.parse('$baseUrl/Student/GetExam?id=$id'));
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
-        setState(() {
-          examsList = responseData['data'] != null ? [responseData['data']] : [];
-        });
+        setState(() { examsList = responseData['data'] != null ? [responseData['data']] : []; });
       }
     } catch (e) { debugPrint("Exams Error: $e"); }
     finally { if (mounted) setState(() => _isExamsLoading = false); }
@@ -230,8 +260,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     try {
       String stId = studentFullData?['id']?.toString() ?? "";
       String levelId = studentFullData?['levelId']?.toString() ?? "1";
-      final url = '$baseUrl/Student/GetAllTasksBsedOnType?Stid=$stId&Levelid=$levelId&Typeid=3';
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse('$baseUrl/Student/GetAllTasksBsedOnType?Stid=$stId&Levelid=$levelId&Typeid=3'));
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         setState(() { coursesList = responseData['data'] ?? []; });
@@ -253,12 +282,47 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   }
 
   void _forceLogout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-          context, MaterialPageRoute(builder: (context) => LoginScreen()), (route) => false);
-    }
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Directionality(
+          textDirection: TextDirection.rtl, // لضمان ظهور المحتوى بالعربي بشكل صحيح
+          child: AlertDialog(
+            backgroundColor: Colors.white, // خلفية بيضاء كما طلبتِ
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            title: const Text("تسجيل الخروج",
+                style: TextStyle(color: kPrimaryBlue, fontWeight: FontWeight.bold)),
+            content: const Text("هل أنت متأكد أنك تريد تسجيل الخروج من التطبيق؟"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context), // إغلاق النافذة
+                child: const Text("إلغاء", style: TextStyle(color: kLabelGrey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kDangerRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  // تنفيذ عملية الخروج الفعلية
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.clear(); // مسح البيانات المحفوظة
+                  if (mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) =>  LoginScreen()),
+                          (route) => false,
+                    );
+                  }
+                },
+                child: const Text("خروج"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -300,86 +364,113 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     }
   }
 
+  // --- UI: أعمال الطالب ---
   Widget _buildStudentTasksTab() {
     if (_isTasksLoading) return const Center(child: CircularProgressIndicator(color: kPrimaryBlue));
 
-    if (studentTasksList.isEmpty) {
+    if (_taskErrorMessage != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.assignment_turned_in_outlined, size: 80, color: kLabelGrey.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            const Text("لا توجد مهام أو أعمال مطلوبة منك حالياً",
-                style: TextStyle(color: kLabelGrey, fontSize: 16, fontWeight: FontWeight.bold)),
+            const Icon(Icons.error_outline, size: 60, color: kDangerRed),
+            const SizedBox(height: 10),
+            Text(_taskErrorMessage!, style: const TextStyle(color: kLabelGrey)),
+            TextButton(onPressed: _fetchStudentTasks, child: const Text("إعادة المحاولة"))
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: studentTasksList.length,
-      itemBuilder: (context, index) {
-        final task = studentTasksList[index];
-        // التأكد من وجود تسليم سابق
-        final hasSubmitted = (task['studentExams'] != null && (task['studentExams'] as List).isNotEmpty) &&
-            task['studentExams'][0]['url'] != null;
+    if (studentTasksList.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _fetchStudentTasks,
+        child: ListView(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Center(
+              child: Column(
+                children: [
+                  Icon(Icons.assignment_turned_in_outlined, size: 80, color: kLabelGrey.withOpacity(0.5)),
+                  const SizedBox(height: 16),
+                  const Text("لا توجد مهام أو أعمال مطلوبة منك حالياً",
+                      style: TextStyle(color: kLabelGrey, fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: kBorderColor),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text(task['name'] ?? "", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kPrimaryBlue))),
-                  if (task['mandatory'] == true)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: kDangerRed.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
-                      child: const Text("إلزامي", style: TextStyle(color: kDangerRed, fontSize: 10, fontWeight: FontWeight.bold)),
+    return RefreshIndicator(
+      onRefresh: _fetchStudentTasks,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: studentTasksList.length,
+        itemBuilder: (context, index) {
+          final task = studentTasksList[index];
+          bool hasSubmitted = false;
+          if (task['studentExams'] != null && (task['studentExams'] as List).isNotEmpty) {
+            hasSubmitted = task['studentExams'].any((exam) => exam['url'] != null && exam['url'].toString().isNotEmpty);
+          }
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: kBorderColor),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(task['name'] ?? "", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: kPrimaryBlue))),
+                    if (task['mandatory'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: kDangerRed.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                        child: const Text("إلزامي", style: TextStyle(color: kDangerRed, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(task['description'] ?? "", style: const TextStyle(color: kTextDark, fontSize: 13)),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: kLabelGrey),
+                    const SizedBox(width: 4),
+                    Text(hasSubmitted ? "تم التسليم بنجاح" : "لم يتم التسليم بعد",
+                        style: TextStyle(color: hasSubmitted ? kSuccessGreen : kLabelGrey, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      onPressed: () => _uploadTaskFile(task['id']),
+                      icon: Icon(hasSubmitted ? Icons.edit : Icons.upload_file, size: 16),
+                      label: Text(hasSubmitted ? "تعديل الرفع" : "رفع الملف"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: hasSubmitted ? Colors.orange : kPrimaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(task['description'] ?? "", style: const TextStyle(color: kTextDark, fontSize: 13)),
-              const Divider(height: 24),
-              Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: kLabelGrey),
-                  const SizedBox(width: 4),
-                  Text(hasSubmitted ? "تم التسليم بنجاح" : "لم يتم التسليم بعد",
-                      style: TextStyle(color: hasSubmitted ? kSuccessGreen : kLabelGrey, fontSize: 12, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: () => _uploadTaskFile(task['id']),
-                    icon: Icon(hasSubmitted ? Icons.edit : Icons.upload_file, size: 16),
-                    label: Text(hasSubmitted ? "تعديل الرفع" : "رفع الملف"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: hasSubmitted ? Colors.orange : kPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
+  // --- UI: البيانات الشخصية ---
   Widget _buildProfileTab() {
     final data = studentFullData;
     final loc = data?['loc'];
@@ -418,9 +509,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     );
   }
 
+// --- UI: الحضور والغياب المطور ---
+  // استبدل دالة _buildAttendanceTab في الكود الخاص بك بهذا الكود المحدث:
+
   Widget _buildAttendanceTab() {
     if (_isAttendanceLoading) return const Center(child: CircularProgressIndicator(color: kPrimaryBlue));
     if (attendanceList.isEmpty) return const Center(child: Text("لا توجد بيانات حضور"));
+
+    // تحديد اتجاه النص بناءً على لغة الجهاز
+    bool isRtl = Directionality.of(context) == TextDirection.rtl;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -433,13 +530,18 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
         ),
         child: Column(
           children: [
+            // رأس الجدول
             Container(
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
               color: const Color(0xFFF8FAFC),
               child: Row(
                 children: [
                   Expanded(flex: 3, child: Center(child: Text('موعد الحلقة', style: _headerStyle))),
-                  Expanded(flex: 2, child: Center(child: Text('الحضور', style: _headerStyle))),
+                  // تعديل: الحضور يقترب من موعد الحلقة بكسل واحد
+                  Expanded(flex: 2, child: Container(
+                      padding: EdgeInsets.only(right: isRtl ? 1 : 0, left: !isRtl ? 1 : 0),
+                      child: Center(child: Text('الحضور', style: _headerStyle))
+                  )),
                   Expanded(flex: 2, child: Center(child: Text('حفظ قديم', style: _headerStyle))),
                   Expanded(flex: 2, child: Center(child: Text('حفظ جديد', style: _headerStyle))),
                   Expanded(flex: 2, child: Center(child: Text('التعليق', style: _headerStyle))),
@@ -458,29 +560,80 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
                 bool isPresent = record['isPresent'] ?? false;
                 String dateRaw = record['createDate'] ?? "";
 
+                String teacherNote = record['note'] ?? "لا يوجد";
+                String points = record['points']?.toString() ?? "0";
+
                 return Column(
                   children: [
                     InkWell(
                       onTap: () => setState(() => _expandedIndex = isExpanded ? null : index),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
-                        color: isExpanded ? kSecondaryBlue.withOpacity(0.5) : Colors.transparent,
+                        color: isExpanded ? kSecondaryBlue.withOpacity(0.4) : Colors.transparent,
                         child: Row(
                           children: [
-                            Expanded(flex: 3, child: Column(children: [Text(_getDayNameFromDate(dateRaw), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), Text(_formatSimpleDate(dateRaw), style: const TextStyle(fontSize: 10, color: Colors.grey))])),
-                            Expanded(flex: 2, child: Center(child: Text(isPresent ? "حضور" : "غياب", style: TextStyle(color: isPresent ? kSuccessGreen : kDangerRed, fontWeight: FontWeight.bold, fontSize: 12)))),
+                            Expanded(flex: 3, child: Column(children: [
+                              Text(_getDayNameFromDate(dateRaw), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              Text(_formatSimpleDate(dateRaw), style: const TextStyle(fontSize: 10, color: Colors.grey))
+                            ])),
+                            // تعديل: بيانات الحضور تقترب من موعد الحلقة بكسل واحد
+                            Expanded(flex: 2, child: Container(
+                                padding: EdgeInsets.only(right: isRtl ? 1 : 0, left: !isRtl ? 1 : 0),
+                                child: Center(child: Text(isPresent ? "حضور" : "غياب",
+                                    style: TextStyle(color: isPresent ? kSuccessGreen : kDangerRed, fontWeight: FontWeight.bold, fontSize: 12)))
+                            )),
                             Expanded(flex: 2, child: Center(child: Text(_getEvaluationText(record['oldAttendanceNote']), style: const TextStyle(fontSize: 12)))),
                             Expanded(flex: 2, child: Center(child: Text(_getEvaluationText(record['newAttendanceNote']), style: const TextStyle(fontSize: 12)))),
-                            Expanded(flex: 2, child: Center(child: Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.chat_bubble_outline, size: 20, color: isExpanded ? kDangerRed : kPrimaryBlue))),
+                            Expanded(flex: 2, child: Center(child: Icon(
+                                isExpanded ? Icons.keyboard_arrow_up : Icons.chat_bubble_outline,
+                                size: 20,
+                                color: isExpanded ? kDangerRed : kPrimaryBlue))),
                           ],
                         ),
                       ),
                     ),
                     if (isExpanded)
                       Container(
-                        padding: const EdgeInsets.all(16),
-                        color: const Color(0xFFF1F5F9),
-                        child: Text("تعليق المعلم : ${record['note'] ?? 'لا يوجد'}"),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                        color: kSecondaryBlue.withOpacity(0.2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // تعليق المعلم (الجهة اليمنى)
+                            Expanded(
+                              flex: 2,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("تعليق المعلم : ", style: TextStyle(color: kSuccessGreen, fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Expanded(child: Text(teacherNote, style: const TextStyle(color: kTextDark, fontSize: 14))),
+                                ],
+                              ),
+                            ),
+                            // التقييم وكلمة إخفاء تحته (الجهة اليسرى)
+                            Expanded(
+                              flex: 1,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      const Text("التقييم : ", style: TextStyle(color: kSuccessGreen, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      Text("$points نقاط", style: const TextStyle(color: kSuccessGreen, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  InkWell(
+                                    onTap: () => setState(() => _expandedIndex = null),
+                                    child: const Text("إخفاء", style: TextStyle(color: kDangerRed, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 );
@@ -491,7 +644,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       ),
     );
   }
-
   String _getDayNameFromDate(String? dateStr) {
     if (dateStr == null) return "";
     DateTime date = DateTime.parse(dateStr);
@@ -526,37 +678,67 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       child: Row(children: [Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 12)), const SizedBox(width: 6), Expanded(child: Text(value, style: const TextStyle(color: kTextDark, fontWeight: FontWeight.w600, fontSize: 12)))]),
     );
   }
-
   Widget _buildWebSidebar() {
     return Drawer(
       child: Container(
         color: Colors.white,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 60),
-              Image.asset('assets/full_logo.png', height: 80, errorBuilder: (c, e, s) => const Icon(Icons.school, size: 60, color: kPrimaryBlue)),
-              const SizedBox(height: 15),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text(studentFullData?['name'] ?? "اسم الطالب", textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue, fontSize: 14)),
+        child: Column(
+          children: [
+            // القسم العلوي المحتوي على اللوجو والقائمة
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 60),
+                    Image.asset(
+                      'assets/full_logo.png',
+                      height: 80,
+                      errorBuilder: (c, e, s) => const Icon(Icons.school, size: 60, color: kPrimaryBlue),
+                    ),
+                    const SizedBox(height: 15),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        studentFullData?['name'] ?? "اسم الطالب",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue, fontSize: 14),
+                      ),
+                    ),
+                    const Divider(height: 30),
+                    _drawerItem(0, Icons.person_outline, "البيانات الشخصية"),
+                    _drawerItem(1, Icons.calendar_today_outlined, "حضور و غياب للمستوى الحالي"),
+                    _drawerItem(2, Icons.book_outlined, "مقررات المستوي"),
+                    _drawerItem(3, Icons.assignment_outlined, "أعمال الطالب"),
+                    _drawerItem(4, Icons.quiz_outlined, "الاختبارات"),
+                  ],
+                ),
               ),
-              const Divider(height: 30),
-              _drawerItem(0, Icons.person_outline, "البيانات الشخصية"),
-              _drawerItem(1, Icons.calendar_today_outlined, "حضور و غياب للمستوى الحالي"),
-              _drawerItem(2, Icons.book_outlined, "مقررات المستوي"),
-              _drawerItem(3, Icons.assignment_outlined, "أعمال الطالب"),
-              _drawerItem(4, Icons.quiz_outlined, "الاختبارات"),
-              const Divider(),
-              _drawerItem(5, Icons.logout, "تسجيل الخروج", isLogout: true),
-              const SizedBox(height: 30),
-            ],
-          ),
+            ),
+
+            // Spacer يقوم بدفع ما تحته إلى أسفل الشاشة تماماً
+            // const Spacer(),
+
+            // القسم السفلي (الخط الفاصل + تسجيل الخروج) بارتفاع 80 بكسل
+            SizedBox(
+              height: 130,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start, // يبدأ بالخط من الأعلى داخل الـ 80 بكسل
+                children: [
+                  const Divider(height: 1), // الخط الفاصل فوق الكلمة مباشرة
+                  Expanded(
+                    child: Center(
+                      child: _drawerItem(5, Icons.logout, "تسجيل الخروج", isLogout: true),
+                    ),
+                  ),
+                  const SizedBox(height: 10), // مسافة بسيطة من الحافة السفلية جداً
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
   Widget _drawerItem(int index, IconData icon, String title, {bool isLogout = false}) {
     bool isSelected = _selectedIndex == index;
     return ListTile(

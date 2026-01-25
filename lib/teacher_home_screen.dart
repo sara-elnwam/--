@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_screen.dart';
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -18,6 +20,50 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       _currentTitle = title;
     });
     Navigator.pop(context); // إغلاق السايدبار عند الضغط
+  }
+
+  // دالة إظهار نافذة تأكيد تسجيل الخروج
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            title: Text("تسجيل الخروج",
+                style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+            content: Text("هل أنت متأكد أنك تريد تسجيل الخروج؟",
+                style: TextStyle(color: Colors.grey.shade700)),
+            actions: [
+              TextButton(
+                child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
+                onPressed: () => Navigator.pop(context),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                ),
+                onPressed: () async {
+                  // تنفيذ الخروج الفعلي
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.clear(); // مسح كل البيانات المحفوظة
+                  if (mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (context) =>  LoginScreen()),
+                            (route) => false
+                    );
+                  }
+                },
+                child: const Text("خروج", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -49,19 +95,19 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       backgroundColor: Colors.white,
       child: Column(
         children: [
-          // لوجو الشركة - مرفوع للأعلى وبدون خط سفلي
+          // رأس السايدبار (اللوجو)
           Container(
             padding: EdgeInsets.only(top: 40, bottom: 10),
             child: Center(
               child: Image.asset(
-                'assets/full_logo.png',
-                height: 80,
-                errorBuilder: (c, e, s) => Icon(Icons.school, size: 60, color: primaryOrange),
+                  'assets/full_logo.png',
+                  height: 80,
+                  errorBuilder: (c, e, s) => Icon(Icons.school, size: 60, color: primaryOrange)
               ),
             ),
           ),
 
-          // العناصر الأساسية
+          // قائمة العناصر
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -77,12 +123,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             ),
           ),
 
-          Divider(height: 1),
+          const Divider(height: 1),
 
-          // رفع تسجيل الخروج بمسافة 90 عن الأسفل
+          // زر تسجيل الخروج في الأسفل
           Container(
-            height: 80, // ارتفاع العنصر نفسه
-            margin: EdgeInsets.only(bottom: 90), // الرفع عن الأسفل بمقدار 90
+            height: 100,
+            margin: const EdgeInsets.only(bottom: 20),
             child: Center(
               child: _buildSidebarItem(
                   Icons.logout,
@@ -126,7 +172,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           ),
           onTap: () {
             if (isLogout) {
-              // هنا تضع بوب أب تسجيل الخروج
+              _showLogoutDialog(); // استدعاء نافذة التأكيد
             } else {
               _onItemTapped(title);
             }
