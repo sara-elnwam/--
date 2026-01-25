@@ -40,6 +40,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   List<dynamic> coursesList = [];
   bool _isCoursesLoading = false;
   int? expandedRowIndex;
+  int? expandedAttendanceIndex; // لتتبع الصف المفتوح حالياً
+  int? _expandedIndex;
+
 
   @override
   void initState() {
@@ -67,15 +70,13 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   }
 
   String _getEvaluationText(dynamic value) {
-    if (value == null || value.toString().trim().isEmpty || value.toString() == "null") return "---";
-    String valStr = value.toString().trim();
-    int? score = int.tryParse(valStr);
-    if (score == null) return valStr;
-    if (score >= 90) return "ممتاز";
-    if (score >= 80) return "جيد جداً";
-    if (score >= 65) return "جيد";
-    if (score >= 50) return "مقبول";
-    return "ضعيف";
+    if (value == null) return "---";
+    int? score = int.tryParse(value.toString());
+    if (score == 1) return "ممتاز";
+    if (score == 2) return "جيد جداً";
+    if (score == 3) return "جيد";
+    if (score == 4) return "مقبول";
+    return "---";
   }
 
   String _getDayName(int dayNumber) {
@@ -215,7 +216,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     );
   }
 
-  final List<String> _titles = ["البيانات الشخصية", "حضور و غياب", "مقررات المستوي", "أعمال الطالب", "الاختبارات"];
+  final List<String> _titles = ["البيانات الشخصية", "حضور و غياب للمستوي الحالي", "مقررات المستوي", "أعمال الطالب", "الاختبارات"];
 
   Widget _getPage(int index) {
     switch (index) {
@@ -244,7 +245,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       children: [
         const Padding(
           padding: EdgeInsets.only(right: 4, bottom: 10),
-          child: Text("البيانات الشخصية", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kTextDark)),
+          child: Text("", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kTextDark)),
         ),
         _buildInfoBox("بيانات الطالب", Icons.person_outline, [
           _infoRow("اسم الطالب :", data?['name'] ?? "---"),
@@ -268,9 +269,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       ],
     );
   }
-
   Widget _buildAttendanceTab() {
+    // 1. التأكد من حالة التحميل
     if (_isAttendanceLoading) return const Center(child: CircularProgressIndicator(color: kPrimaryBlue));
+
+    // 2. التحقق من وجود داتا
     if (attendanceList.isEmpty) {
       return Center(
         child: Column(
@@ -278,95 +281,159 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           children: [
             const Text("لا يوجد بيانات سجل حضور حالياً"),
             const SizedBox(height: 10),
-            ElevatedButton(onPressed: () => _fetchAttendance(studentFullData?['id']?.toString() ?? ""), child: const Text("تحديث البيانات")),
+            ElevatedButton(
+              onPressed: () => _fetchAttendance(studentFullData?['id']?.toString() ?? ""),
+              child: const Text("تحديث"),
+            )
           ],
         ),
       );
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("حضور و غياب الطالب للمستوى الحالي", style: TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue)),
-          const SizedBox(height: 15),
+          const Text("",
+              style: TextStyle(fontWeight: FontWeight.bold, color: kTextDark, fontSize: 16)),
+          const SizedBox(height: 20),
+
           Container(
-            width: double.infinity,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorderColor)),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kBorderColor),
+            ),
             child: Column(
               children: [
+                // --- الهيدر (توزيع Flex دقيق) ---
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                  decoration: const BoxDecoration(color: kHeaderBg, borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
-                  child: const Row(
+                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+                  color: const Color(0xFFF8FAFC),
+                  child: Row(
                     children: [
-                      Expanded(flex: 2, child: Text('موعد الحلقة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 1, child: Text('الحضور', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 1, child: Text('حفظ قديم', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 1, child: Text('حفظ جديد', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 1, child: Text('التعليق', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+                      Expanded(flex: 3, child: Center(child: Text('موعد الحلقة', style: _headerStyle))),
+                      Expanded(flex: 2, child: Center(child: Text('الحضور', style: _headerStyle))),
+                      Expanded(flex: 2, child: Center(child: Text('حفظ قديم', style: _headerStyle))),
+                      Expanded(flex: 2, child: Center(child: Text('حفظ جديد', style: _headerStyle))),
+                      Expanded(flex: 2, child: Center(child: Text('التعليق', style: _headerStyle))),
                     ],
                   ),
                 ),
+                const Divider(height: 1),
+
+                // --- قائمة الصفوف ---
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: attendanceList.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1, color: kBorderColor),
+                  separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final record = attendanceList[index];
-                    bool isPresent = record['isPresent'] == true;
-                    bool isExpanded = expandedRowIndex == index;
+                    bool isExpanded = _expandedIndex == index;
+
+                    // الربط المباشر مع الـ JSON اللي بعتيه
+                    bool isPresent = record['isPresent'] ?? false;
+                    String dateRaw = record['createDate'] ?? "";
 
                     return Column(
                       children: [
                         InkWell(
-                          onTap: () => setState(() => expandedRowIndex = isExpanded ? null : index),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          onTap: () => setState(() => _expandedIndex = isExpanded ? null : index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+                            color: isExpanded ? kSecondaryBlue.withOpacity(0.5) : Colors.transparent,
                             child: Row(
                               children: [
-                                Expanded(flex: 2, child: Text(record['createDate']?.toString().split('T')[0] ?? "---", style: const TextStyle(fontSize: 10))),
-                                Expanded(flex: 1, child: Text(isPresent ? "حضور" : "غياب", style: TextStyle(color: isPresent ? kSuccessGreen : kDangerRed, fontWeight: FontWeight.bold, fontSize: 10))),
-                                Expanded(flex: 1, child: Text(_getEvaluationText(record['oldAttendanceNote']), style: const TextStyle(fontSize: 10))),
-                                Expanded(flex: 1, child: Text(_getEvaluationText(record['newAttendanceNote']), style: const TextStyle(fontSize: 10))),
-                                const Expanded(flex: 1, child: Icon(Icons.comment_bank_outlined, color: kPrimaryBlue, size: 18)),
+                                // موعد الحلقة
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    children: [
+                                      Text(_getDayNameFromDate(dateRaw), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      Text(_formatSimpleDate(dateRaw), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                    ],
+                                  ),
+                                ),
+                                // الحضور
+                                Expanded(
+                                  flex: 2,
+                                  child: Center(
+                                    child: Text(
+                                      isPresent ? "حضور" : "غياب",
+                                      style: TextStyle(
+                                          color: isPresent ? kSuccessGreen : kDangerRed,
+                                          fontWeight: FontWeight.bold, fontSize: 12
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // حفظ قديم
+                                Expanded(
+                                  flex: 2,
+                                  child: Center(child: Text(_getEvaluationText(record['oldAttendanceNote']), style: const TextStyle(fontSize: 12))),
+                                ),
+                                // حفظ جديد
+                                Expanded(
+                                  flex: 2,
+                                  child: Center(child: Text(_getEvaluationText(record['newAttendanceNote']), style: const TextStyle(fontSize: 12))),
+                                ),
+                                // أيقونة التعليق
+                                Expanded(
+                                  flex: 2,
+                                  child: Center(
+                                    child: Icon(
+                                      isExpanded ? Icons.keyboard_arrow_up : Icons.chat_bubble_outline,
+                                      size: 20,
+                                      color: isExpanded ? kDangerRed : kPrimaryBlue,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
+
+                        // --- جزء التعليق المخفي (أنيميشن) ---
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
-                          child: Container(
+                          child: isExpanded
+                              ? Container(
                             width: double.infinity,
-                            color: kSecondaryBlue.withOpacity(0.4),
-                            child: isExpanded
-                                ? Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.info_outline, color: kPrimaryBlue, size: 16),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text("تعليق المعلم: ${record['note'] ?? 'لا يوجد تعليق'}", style: const TextStyle(fontSize: 12, color: kPrimaryBlue, fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 4),
-                                        Text("التقييم: ${record['points'] ?? 0} نقاط", style: const TextStyle(fontSize: 11, color: kTextDark)),
-                                      ],
+                            padding: const EdgeInsets.all(16),
+                            color: const Color(0xFFF1F5F9),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        "تعليق المعلم : ${record['note'] ?? 'لا يوجد'}",
+                                        style: const TextStyle(color: kSuccessGreen, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
+                                    Text(
+                                      "التقييم : ${record['points'] ?? 0} نقاط",
+                                      style: const TextStyle(color: kSuccessGreen, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: InkWell(
+                                    onTap: () => setState(() => _expandedIndex = null),
+                                    child: const Text("إخفاء", style: TextStyle(color: kDangerRed, fontSize: 12, fontWeight: FontWeight.bold)),
                                   ),
-                                  IconButton(icon: const Icon(Icons.close, color: kDangerRed, size: 16), onPressed: () => setState(() => expandedRowIndex = null)),
-                                ],
-                              ),
-                            )
-                                : const SizedBox(width: double.infinity, height: 0),
-                          ),
+                                )
+                              ],
+                            ),
+                          )
+                              : const SizedBox.shrink(),
                         ),
                       ],
                     );
@@ -379,7 +446,21 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       ),
     );
   }
+  // دوال مساعدة لضبط الوقت والتاريخ
+  String _getDayNameFromDate(String? dateStr) {
+    if (dateStr == null) return "";
+    DateTime date = DateTime.parse(dateStr);
+    const days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+    // تحويل اليوم من نظام Dart (1=الاثنين) لنظام القائمة لدينا
+    return days[date.weekday % 7];
+  }
 
+  String _formatSimpleDate(String? dateStr) {
+    if (dateStr == null) return "";
+    DateTime date = DateTime.parse(dateStr);
+    return "${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}";
+  }
+  TextStyle get _headerStyle => const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kPrimaryBlue);
   Widget _buildInfoBox(String title, IconData icon, List<Widget> rows) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

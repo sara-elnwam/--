@@ -302,6 +302,21 @@ class UserTypeScreen extends StatefulWidget {
 class _UserTypeScreenState extends State<UserTypeScreen> {
   String? selectedType;
 
+  // هذه هي الدالة المسؤولة عن الانتقال الفوري
+  void _handleTypeSelection(String type) async {
+    setState(() => selectedType = type);
+
+    // تأخير بسيط (250 مللي ثانية) للسماح للمستخدم برؤية تأثير الاختيار
+    await Future.delayed(Duration(milliseconds: 50));
+
+    if (mounted) {
+      if (type == 'student') {
+        Navigator.push(context, _createRoute(StudentRegistrationScreen()));
+      } else {
+        Navigator.push(context, _createRoute(EmployeeRegistrationScreen()));
+      }
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -325,15 +340,8 @@ class _UserTypeScreenState extends State<UserTypeScreen> {
               _buildTypeCard('طالب', 'للتسجيل في الدورات ومتابعة الدروس', Icons.school_rounded, 'student'),
               SizedBox(height: 20),
               _buildTypeCard('موظف', 'لإدارة النظام والمحتوى التعليمي', Icons.work_rounded, 'employee'),
-              Spacer(),
-              if (selectedType != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 40.0),
-                  child: _buildPrimaryButton(context, "التالي", () {
-                    if (selectedType == 'student') Navigator.push(context, _createRoute(StudentRegistrationScreen()));
-                    else Navigator.push(context, _createRoute(EmployeeRegistrationScreen()));
-                  }),
-                ),
+
+              // تم حذف زر "التالي" من هنا تماماً
             ],
           ),
         ),
@@ -341,29 +349,36 @@ class _UserTypeScreenState extends State<UserTypeScreen> {
     );
   }
 
-  Widget _buildTypeCard(String title, String desc, IconData icon, String type) {
-    bool isSelected = selectedType == type;
-    return GestureDetector(
-      onTap: () => setState(() => selectedType = type),
-      child: Container(
-        padding: EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isSelected ? primaryOrange.withOpacity(0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade200, width: isSelected ? 2 : 1),
-        ),
-        child: Row(
-          children: [
-            Container(padding: EdgeInsets.all(12), decoration: BoxDecoration(color: isSelected ? primaryOrange : Colors.grey.shade100, shape: BoxShape.circle), child: Icon(icon, color: isSelected ? Colors.white : darkBlue)),
-            SizedBox(width: 15),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue)), Text(desc, style: TextStyle(fontSize: 13, color: greyText))])),
-            if (isSelected) Icon(Icons.check_circle, color: primaryOrange),
-          ],
-        ),
+Widget _buildTypeCard(String title, String desc, IconData icon, String type) {
+  bool isSelected = selectedType == type;
+  return GestureDetector(
+    onTap: () => _handleTypeSelection(type), // الانتقال الفوري
+    child: Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isSelected ? primaryOrange.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade200, width: isSelected ? 2 : 1),
       ),
-    );
-  }
+      child: Row(
+        children: [
+          Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(color: isSelected ? primaryOrange : Colors.grey.shade100, shape: BoxShape.circle),
+              child: Icon(icon, color: isSelected ? Colors.white : darkBlue)
+          ),
+          SizedBox(width: 15),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue)), Text(desc, style: TextStyle(fontSize: 13, color: greyText))])),
+          if (isSelected) Icon(Icons.check_circle, color: primaryOrange),
+        ],
+      ),
+    ),
+  );
 }
+}
+
+
+
 
 Future<void> _handleRegistration({
   required BuildContext context,
