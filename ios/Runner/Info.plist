@@ -28,6 +28,38 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>نحتاج للوصول لمكتبة الصور لرفع صور الواجبات</string>
+	<key>NSCameraUsageDescription</key>
+	<string>نحتاج للوصول للكاميرا لتصوير الواجب ورفعه</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>نحتاج للوصول للميكروفون (في حال تسجيل فيديو للمهمة).</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>نحتاج للوصول للملفات لاختيار مستندات الواجب</string>
+
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+
+	<key>FDMaximumConcurrentTasks</key>
+	<integer>5</integer>
+	<key>FDAllFilesDownloadedMessage</key>
+	<string>تم تحميل جميع الملفات بنجاح</string>
+
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>http</string>
+		<string>https</string>
+	</array>
+
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

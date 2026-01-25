@@ -69,9 +69,9 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
         saveInPublicStorage: true,
       );
 
-      _showSnackBar("⏳ بدأ التحميل.. تابع الستارة", isError: false);
+      _showSnackBar(" بدأ التحميل.. ", isError: false);
     } catch (e) {
-      _showSnackBar("❌ فشل في بدء التحميل");
+      _showSnackBar(" فشل في بدء التحميل");
     }
   }
 
