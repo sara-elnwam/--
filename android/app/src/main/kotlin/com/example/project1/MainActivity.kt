@@ -1,6 +1,6 @@
-package com.example.project1 // تأكدي أن هذا هو نفس الـ package الخاص بمشروعك
+package com.example.project1 // تأكد من اسم الباكيدج بتاعك
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity: FlutterActivity() {
+class MainActivity: FlutterFragmentActivity() {
 }

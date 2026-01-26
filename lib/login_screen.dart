@@ -4,9 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'student_home_screen.dart';
-import 'teacher_home_screen.dart';
-import 'employee_home_screen.dart';
+import 'student/student_home_screen.dart';
+import 'teacher/teacher_home_screen.dart';
+import 'employee/employee_home_screen.dart';
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
           } else {
             userData = Map<String, dynamic>.from(decodedBody);
           }
-
+          final prefs = await SharedPreferences.getInstance();
           // حفظ البيانات (مع التأكد إننا مش بنخزن Null يوقف البرنامج)
           await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
           await prefs.setString('student_id', userData['id']?.toString() ?? "");
@@ -173,12 +173,17 @@ class _LoginScreenState extends State<LoginScreen> {
           // التوجيه (حتى لو userType مش موجود نعتبره طالب)
           int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
 
+          // التوجيه الصحيح بناءً على بيانات السيرفر
+
           Widget nextScreen;
-          if (userType == 1 || userType == 3) {
-            nextScreen = EmployeeHomeScreen();
-          } else if (userType == 2) {
+          if (userType == 1) {
+            // 1 = معلم حسب السيرفر
             nextScreen = TeacherHomeScreen();
+          } else if (userType == 2 || userType == 3) {
+            // 2 أو 3 = موظف (إدارة أو محاسب)
+            nextScreen = EmployeeHomeScreen();
           } else {
+            // الطالب عادة بيكون 0 أو قيمة مختلفة
             nextScreen = StudentHomeScreen(loginData: userData);
           }
 
@@ -591,9 +596,9 @@ class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen>
       int empTypeId = jobTypeMap[_selectedJobTitle] ?? 1;
       int userType;
       if (empTypeId == 1) {
-        userType = 1; // جرب تغيير هذه لـ 2 إذا كان السيرفر يعتبر المعلم 2 في جدول المستخدمين
+        userType = 1; // معلم
       } else {
-        userType = 2; // الموظفين الإداريين
+        userType = 2; // موظف (إدارة/محاسب)
       }
       Map<String, dynamic> employeeData = {
         "name": _nameController.text.trim(),

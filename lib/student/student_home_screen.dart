@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_screen.dart';
+import '../login_screen.dart';
 import 'student_exams_widget.dart';
 import 'student_courses_widget.dart';
 import 'package:file_picker/file_picker.dart';
