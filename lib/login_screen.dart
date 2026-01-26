@@ -131,7 +131,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-      final prefs = await SharedPreferences.getInstance();
       try {
         final String phone = _phoneController.text.trim();
         final String password = _passwordController.text;
@@ -152,57 +151,56 @@ class _LoginScreenState extends State<LoginScreen> {
           final dynamic decodedBody = jsonDecode(response.body);
           Map<String, dynamic> userData;
 
-          // معالجة الـ List
           if (decodedBody is List) {
             if (decodedBody.isNotEmpty) {
               userData = Map<String, dynamic>.from(decodedBody[0]);
             } else {
-              _showErrorSnackBar("لا يوجد مستخدم");
+              _showErrorSnackBar("لا يوجد مستخدم مسجل بهذا الرقم");
               return;
             }
           } else {
             userData = Map<String, dynamic>.from(decodedBody);
           }
+
           final prefs = await SharedPreferences.getInstance();
-          // حفظ البيانات (مع التأكد إننا مش بنخزن Null يوقف البرنامج)
+
+          // التعديل الجوهري هنا: السيرفر يرسلuserId وليس id
+          // قمنا بفحص كلاً منuserId و id لضمان الحصول على القيمة في كل الحالات
+          String idToSave = userData['userId']?.toString() ??
+              userData['id']?.toString() ??
+              userData['user_Id']?.toString() ?? "";
+
           await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
-          await prefs.setString('student_id', userData['id']?.toString() ?? "");
+          await prefs.setString('user_id', idToSave); // حفظنا المعرف الحقيقي (مثل 1294)
           await prefs.setString('loginData', jsonEncode(userData));
           await prefs.setBool('is_logged_in', true);
 
-          // التوجيه (حتى لو userType مش موجود نعتبره طالب)
           int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
-
-          // التوجيه الصحيح بناءً على بيانات السيرفر
 
           Widget nextScreen;
           if (userType == 1) {
-            // 1 = معلم حسب السيرفر
             nextScreen = TeacherHomeScreen();
           } else if (userType == 2 || userType == 3) {
-            // 2 أو 3 = موظف (إدارة أو محاسب)
             nextScreen = EmployeeHomeScreen();
           } else {
-            // الطالب عادة بيكون 0 أو قيمة مختلفة
             nextScreen = StudentHomeScreen(loginData: userData);
           }
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تم تسجيل الدخول بنجاح")),
+              const SnackBar(content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai'))),
             );
 
-            // استخدام pushReplacement لضمان الانتقال
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => nextScreen),
             );
           }
         } else {
-          _showErrorSnackBar("كلمة مرور أو رقم هاتف غير صحيح: ${response.statusCode}");
+          _showErrorSnackBar("رقم الهاتف أو كلمة المرور غير صحيحة");
         }
       } catch (e) {
         debugPrint("FATAL_ERROR: $e");
-        _showErrorSnackBar("حدث خطأ تقني، حاول مرة أخرى");
+        _showErrorSnackBar("حدث خطأ في الاتصال بالسيرفر");
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -403,18 +401,17 @@ Future<void> _handleRegistration({
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
-        responseData['userType'] = data['type'];
-        String userIdFromResponse = responseData['userId'].toString();
         final prefs = await SharedPreferences.getInstance();
+
+        // توحيد جلب الـ ID سواء كان اسمه id أو userId من السيرفر
+        String finalId = responseData['userId']?.toString() ?? responseData['id']?.toString() ?? "";
+
         await prefs.setString('user_token', responseData['token'] ?? "");
-        await prefs.setString('student_id', responseData['userId']?.toString() ?? "");
-        await prefs.setString('registered_user_id', userIdFromResponse);
-        // حفظ كامل البيانات ليتمكن التطبيق من قراءتها عند الفتح مرة أخرى
-        await prefs.setString(
-            'loginData', jsonEncode(responseData)); // <--- إضافة هذا السطر
+        await prefs.setString('user_id', finalId); // توحيد المفتاح ليكون user_id
+        await prefs.setString('loginData', jsonEncode(responseData));
         await prefs.setBool('is_logged_in', true);
-        Navigator.push(
-            context, MaterialPageRoute(builder: (context) => SuccessScreen()));
+
+        Navigator.push(context, MaterialPageRoute(builder: (context) => SuccessScreen()));
       }
     }else {
       logger.e("API_ERROR: ${response.statusCode} | Body: ${response.body}");

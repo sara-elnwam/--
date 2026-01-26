@@ -20,6 +20,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   String _currentTitle = "الصفحة الرئيسية";
   bool _isLoading = true;
   EmployeeData? employeeData;
+  Map<String, dynamic>? _rawResponse; // مخزن للبيانات الخام من السيرفر
 
   @override
   void initState() {
@@ -28,20 +29,30 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   }
 
   Future<void> _fetchEmployeeProfile() async {
+    setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String id = prefs.getString('user_id') ?? "6";
+      String? id = prefs.getString('user_id');
+
+      if (id == null || id.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
 
       final response = await http.get(
         Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'),
       );
 
       if (response.statusCode == 200) {
-        final employeeModel = EmployeeModel.fromJson(jsonDecode(response.body));
+        final Map<String, dynamic> decodedData = jsonDecode(response.body);
+        final employeeModel = EmployeeModel.fromJson(decodedData);
         setState(() {
+          _rawResponse = decodedData['data']; // حفظ بيانات data للوصول للمسمى الوظيفي
           employeeData = employeeModel.data;
           _isLoading = false;
         });
+      } else {
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint("Error fetching employee data: $e");
@@ -64,12 +75,13 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           backgroundColor: Colors.white,
           elevation: 0.5,
           scrolledUnderElevation: 0,
-          title: Text(_currentTitle, style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+          title: Text(_currentTitle,
+              style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
           iconTheme: IconThemeData(color: darkBlue),
         ),
         drawer: _buildEmployeeSidebar(context),
         body: _isLoading
-            ? Center(child: CircularProgressIndicator(color: kActiveBlue))
+            ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
             : _buildBody(),
       ),
     );
@@ -77,6 +89,17 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
 
   Widget _buildBody() {
     if (_currentTitle == "البيانات الشخصية") {
+      String rawDate = employeeData?.joinDate?.toString() ?? "---";
+      String formattedDate = (rawDate != "---" && rawDate.length >= 10)
+          ? rawDate.substring(0, 10)
+          : rawDate;
+
+      // جلب المسمى الوظيفي من البيانات الخام مباشرة لتجنب خطأ الموديل
+      String jobTitle = "---";
+      if (_rawResponse != null && _rawResponse!['employeeType'] != null) {
+        jobTitle = _rawResponse!['employeeType']['name'] ?? "---";
+      }
+
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -84,13 +107,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             _infoRow("اسم الموظف :", employeeData?.name ?? "---"),
             _infoRow("كود الموظف :", employeeData?.id?.toString() ?? "---"),
             _infoRow("المكتب التابع له :", employeeData?.loc?.name ?? "---"),
-            _infoRow("موعد الالتحاق بالمدرسة :", employeeData?.joinDate?.toString().split(' ')[0] ?? "---"),
+            _infoRow("موعد الالتحاق بالمدرسة :", formattedDate),
             _infoRow("المؤهل الدراسي :", employeeData?.educationDegree ?? "---"),
+            _infoRow("المسمى الوظيفي :", jobTitle),
           ]),
         ],
       );
     }
-    return Center(child: Text("محتوى قسم: $_currentTitle", style: TextStyle(color: Colors.grey)));
+    return Center(child: Text("محتوى قسم: $_currentTitle",
+        style: const TextStyle(color: Colors.grey, fontFamily: 'Almarai')));
   }
 
   Widget _buildInfoCard(String title, IconData icon, List<Widget> children) {
@@ -109,7 +134,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               children: [
                 Icon(icon, color: kActiveBlue, size: 22),
                 const SizedBox(width: 10),
-                Text(title, style: TextStyle(color: kActiveBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(title,
+                    style: const TextStyle(color: kActiveBlue, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
               ],
             ),
           ),
@@ -129,11 +155,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 14)),
+          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 14, fontFamily: 'Almarai')),
           const SizedBox(width: 10),
           Expanded(
             child: Text(value,
-              style: TextStyle(color: darkBlue, fontWeight: FontWeight.w600, fontSize: 14),
+              style: TextStyle(color: darkBlue, fontWeight: FontWeight.w600, fontSize: 14, fontFamily: 'Almarai'),
               textAlign: TextAlign.left,
             ),
           ),
@@ -152,7 +178,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             child: Center(
                 child: Image.asset('assets/full_logo.png',
                     height: 80,
-                    errorBuilder: (c,e,s) => Icon(Icons.business, size: 50, color: kActiveBlue)
+                    errorBuilder: (c,e,s) => const Icon(Icons.business, size: 50, color: kActiveBlue)
                 )
             ),
           ),
@@ -176,14 +202,13 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             ),
           ),
           const Divider(height: 1),
-          // تم رفع زر تسجيل الخروج وتعديل لونه
           _buildSidebarItem(
               Icons.logout,
               "تسجيل الخروج",
               color: Colors.redAccent,
               isLogout: true
           ),
-          const SizedBox(height: 100), // الارتفاع المطلوب من الأسفل
+          const SizedBox(height: 100),
         ],
       ),
     );
@@ -205,7 +230,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           title: Text(title, style: TextStyle(
               color: isSelected ? Colors.white : (color ?? darkBlue),
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 13)),
+              fontSize: 13,
+              fontFamily: 'Almarai')),
           onTap: () => isLogout ? _showLogoutDialog() : _onItemTapped(title),
         ),
       ),
@@ -218,20 +244,20 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: Colors.white, // خلفية بيضاء
-          surfaceTintColor: Colors.white, // منع تأثير الألوان في أندرويد 12+
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: Text("تسجيل الخروج",
-              style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
-          content: const Text("هل أنت متأكد أنك تريد تسجيل الخروج؟"),
+              style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
+          content: const Text("هل أنت متأكد أنك تريد تسجيل الخروج؟", style: TextStyle(fontFamily: 'Almarai')),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("إلغاء", style: TextStyle(color: Colors.grey))
+                child: const Text("إلغاء", style: TextStyle(color: Colors.grey, fontFamily: 'Almarai'))
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent, // زر التأكيد بلون أحمر جذاب
+                  backgroundColor: Colors.redAccent,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
               ),
@@ -246,7 +272,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                   );
                 }
               },
-              child: const Text("خروج", style: TextStyle(color: Colors.white)),
+              child: const Text("خروج", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
             ),
           ],
         ),

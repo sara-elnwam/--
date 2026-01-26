@@ -28,9 +28,15 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   Future<void> _fetchTeacherProfile() async {
+    setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String id = prefs.getString('user_id') ?? "6";
+      String? id = prefs.getString('user_id');
+
+      if (id == null || id.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
 
       final response = await http.get(
         Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'),
@@ -42,16 +48,13 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           teacherData = teacherModel.data;
           _isLoading = false;
         });
+      } else {
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint("Error: $e");
       setState(() => _isLoading = false);
     }
-  }
-
-  void _onItemTapped(String title) {
-    setState(() => _currentTitle = title);
-    Navigator.pop(context);
   }
 
   @override
@@ -63,20 +66,28 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          scrolledUnderElevation: 0,
-          title: Text(_currentTitle, style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+          title: Text(_currentTitle, style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
           iconTheme: IconThemeData(color: darkBlue),
         ),
         drawer: _buildTeacherSidebar(context),
         body: _isLoading
             ? Center(child: CircularProgressIndicator(color: kActiveBlue))
-            : _buildBody(),
+            : RefreshIndicator(
+          onRefresh: _fetchTeacherProfile,
+          child: _buildBody(),
+        ),
       ),
     );
   }
 
   Widget _buildBody() {
-    if (_currentTitle == "البيانات الشخصية" || _currentTitle == "الصفحة الرئيسية") {
+    if (_currentTitle == "البيانات الشخصية") {
+      // تعديل بسيط هنا لعرض التاريخ (سنة-شهر-يوم) فقط بدون الأصفار
+      String rawDate = teacherData?.joinDate?.toString() ?? "---";
+      String formattedDate = (rawDate != "---" && rawDate.length >= 10)
+          ? rawDate.substring(0, 10)
+          : rawDate;
+
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -84,19 +95,17 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             _infoRow("اسم المعلم :", teacherData?.name ?? "---"),
             _infoRow("كود المعلم :", teacherData?.id?.toString() ?? "---"),
             _infoRow("المكتب التابع له :", teacherData?.loc?.name ?? "---"),
-            _infoRow("موعد الالتحاق بالمدرسة :", teacherData?.joinDate?.toString().split(' ')[0] ?? "---"),
+            _infoRow("موعد الالتحاق بالمدرسة :", formattedDate),
             _infoRow("المؤهل الدراسي :", teacherData?.educationDegree ?? "---"),
           ]),
-
           const SizedBox(height: 16),
-
           _buildInfoCard("الدورات التدريبية الحاصل عليها", Icons.school_outlined, [
             if (teacherData?.courses == null || teacherData!.courses!.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
                   child: Text("لا توجد دورات تدريبية",
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
                 ),
               )
             else
@@ -108,7 +117,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         ],
       );
     }
-    return Center(child: Text("قسم $_currentTitle قيد التطوير"));
+    return Center(child: Text("قسم $_currentTitle", style: TextStyle(fontFamily: 'Almarai', color: darkBlue)));
   }
 
   Widget _buildInfoCard(String title, IconData icon, List<Widget> children) {
@@ -117,7 +126,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kBorderColor),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +136,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               children: [
                 Icon(icon, color: kActiveBlue, size: 22),
                 const SizedBox(width: 10),
-                Text(title, style: TextStyle(color: kActiveBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(title, style: TextStyle(color: kActiveBlue, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
               ],
             ),
           ),
@@ -148,11 +156,11 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 14)),
+          Text(label, style: const TextStyle(color: kLabelGrey, fontSize: 14, fontFamily: 'Almarai')),
           const SizedBox(width: 10),
           Expanded(
             child: Text(value,
-              style: TextStyle(color: darkBlue, fontWeight: FontWeight.w600, fontSize: 14),
+              style: TextStyle(color: darkBlue, fontWeight: FontWeight.w600, fontSize: 14, fontFamily: 'Almarai'),
               textAlign: TextAlign.left,
             ),
           ),
@@ -169,36 +177,28 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           Container(
             padding: EdgeInsets.only(top: 40, bottom: 10),
             child: Center(
-              child: Image.asset(
-                  'assets/full_logo.png',
-                  height: 80,
-                  errorBuilder: (c, e, s) => Icon(Icons.school, size: 60, color: primaryOrange)
-              ),
+              child: Image.asset('assets/full_logo.png', height: 80,
+                  errorBuilder: (c, e, s) => Icon(Icons.school, size: 60, color: primaryOrange)),
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildSidebarItem(Icons.home_outlined, "الصفحة الرئيسية"),
-                  _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
-                  _buildSidebarItem(Icons.fact_check_outlined, "الحضور و الإنصراف"),
-                  _buildSidebarItem(Icons.menu_book_outlined, "المنهج / المقرر"),
-                  _buildSidebarItem(Icons.groups_outlined, "المجموعات"),
-                  _buildSidebarItem(Icons.access_time, "مواعيد الدرس"),
-                ],
-              ),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildSidebarItem(Icons.home_outlined, "الصفحة الرئيسية"),
+                _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
+                _buildSidebarItem(Icons.fact_check_outlined, "الحضور و الإنصراف"),
+                _buildSidebarItem(Icons.menu_book_outlined, "المنهج / المقرر"),
+                _buildSidebarItem(Icons.groups_outlined, "المجموعات"),
+                _buildSidebarItem(Icons.access_time, "مواعيد الدرس"),
+              ],
             ),
           ),
           const Divider(height: 1),
-          // تم رفع زر تسجيل الخروج هنا
-          _buildSidebarItem(
-              Icons.logout,
-              "تسجيل الخروج",
-              color: Colors.redAccent,
-              isLogout: true
+          Padding(
+            padding: const EdgeInsets.only(bottom: 100.0),
+            child: _buildSidebarItem(Icons.logout, "تسجيل الخروج", color: Colors.redAccent, isLogout: true),
           ),
-          const SizedBox(height: 90), // المسافة المطلوبة من الأسفل
         ],
       ),
     );
@@ -206,30 +206,20 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 
   Widget _buildSidebarItem(IconData icon, String title, {Color? color, bool isLogout = false}) {
     bool isSelected = _currentTitle == title;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? kActiveBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isSelected ? Border.all(color: Colors.white, width: 0.5) : null,
-        ),
-        child: ListTile(
-          visualDensity: VisualDensity.compact,
-          leading: Icon(icon, color: isSelected ? Colors.white : (color ?? darkBlue), size: 22),
-          title: Text(title, style: TextStyle(
-              color: isSelected ? Colors.white : (color ?? darkBlue),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 14)),
-          onTap: () {
-            if (isLogout) {
-              _showLogoutDialog();
-            } else {
-              _onItemTapped(title);
-            }
-          },
-        ),
-      ),
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? kActiveBlue : (color ?? darkBlue)),
+      title: Text(title, style: TextStyle(
+          color: isSelected ? kActiveBlue : (color ?? darkBlue),
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontFamily: 'Almarai')),
+      onTap: () {
+        if (isLogout) {
+          _showLogoutDialog();
+        } else {
+          setState(() => _currentTitle = title);
+          Navigator.pop(context);
+        }
+      },
     );
   }
 
@@ -239,28 +229,20 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: Colors.white, // خلفية بيضاء
-          surfaceTintColor: Colors.white, // لضمان بقاء اللون أبيض في الماتيريال 3
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: Text("تسجيل الخروج", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
-          content: const Text("هل أنت متأكد أنك تريد تسجيل الخروج؟"),
+          title: Text("تسجيل الخروج", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold)),
+          content: Text("هل أنت متأكد؟", style: TextStyle(fontFamily: 'Almarai')),
           actions: [
-            TextButton(
-                child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
-                onPressed: () => Navigator.pop(context)
-            ),
+            TextButton(child: Text("إلغاء"), onPressed: () => Navigator.pop(context)),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent, // لون أحمر هادئ واحترافي
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
-                if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (c) => LoginScreen()), (r) => false);
+                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (c) => LoginScreen()), (r) => false);
               },
-              child: const Text("خروج", style: TextStyle(color: Colors.white)),
+              child: Text("خروج", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
