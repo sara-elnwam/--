@@ -5,14 +5,25 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 
+// استيراد مكتبات الفايربيز الضرورية
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart'; // هذا الملف الذي تم إنشاؤه بواسطة flutterfire configure
+
 import 'login_screen.dart';
 import 'student/student_home_screen.dart';
 import 'teacher/teacher_home_screen.dart';
 import 'employee/employee_home_screen.dart';
 
 void main() async {
+  // التأكد من تهيئة روابط Flutter قبل أي عمليات إضافية
   WidgetsFlutterBinding.ensureInitialized();
 
+  // تهيئة Firebase باستخدام الإعدادات التي تم إنشاؤها
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // تهيئة أداة التحميل
   await FlutterDownloader.initialize(
       debug: true,
       ignoreSsl: true
@@ -72,7 +83,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      // غيرنا backOut لـ easeOutBack عشان تشتغل على كل الإصدارات
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
 
@@ -90,22 +100,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
       if (isLoggedIn && loginDataString != null && loginDataString.isNotEmpty) {
         final Map<String, dynamic> responseData = jsonDecode(loginDataString);
-
-        // التحويل الآمن للـ userType
         final int userType = int.tryParse(responseData['userType']?.toString() ?? "0") ?? 0;
 
         Widget nextScreen;
-
-        // التقسيم حسب الـ Swagger اللي بعته:
-        // 1 = معلم/معلمة
-        // 2 = إدارة
-        // 3 = محاسب
         if (userType == 1) {
           nextScreen = TeacherHomeScreen();
         } else if (userType == 2 || userType == 3) {
           nextScreen = EmployeeHomeScreen();
         } else {
-          // لو طالب أو حالة تانية
           nextScreen = StudentHomeScreen(loginData: responseData);
         }
 
@@ -159,8 +161,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   const Icon(Icons.image, size: 50, color: Colors.grey),
                 ),
                 const SizedBox(height: 20),
-
-
               ],
             ),
           ),

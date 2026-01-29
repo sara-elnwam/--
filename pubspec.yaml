@@ -49,6 +49,7 @@ dependencies:
   # عدلي السطرين دول كدة بالظبط
   flutter_localizations:
     sdk: flutter
+  firebase_core: ^4.4.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
