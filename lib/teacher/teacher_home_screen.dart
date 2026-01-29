@@ -7,6 +7,7 @@ import 'teacher_model.dart';
 import 'attendance_screen.dart'; // استيراد شاشة الحضور الجديدة
 import 'package:project1/teacher/curriculum/curriculum_screen.dart'; // تأكد من المسار الصحيح لملفك
 // --- الألوان الثابتة ---
+import 'sessions_screen.dart';
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
