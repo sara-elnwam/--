@@ -24,41 +24,28 @@ class TeacherData {
   String? ssn;
   String? phone;
   String? educationDegree;
-  List<dynamic>? courses; // الدورات التدريبية
+  List<dynamic>? courses;
 
-  TeacherData({
-    this.id,
-    this.joinDate,
-    this.loc,
-    this.name,
-    this.ssn,
-    this.phone,
-    this.educationDegree,
-    this.courses,
-  });
+  TeacherData({this.id, this.joinDate, this.loc, this.name, this.ssn, this.phone, this.educationDegree, this.courses});
 
-  factory TeacherData.fromJson(Map<String, dynamic> json) => TeacherData(
-    id: json["id"],
-    joinDate: json["joinDate"] == null ? null : DateTime.parse(json["joinDate"]),
-    loc: json["loc"] == null ? null : Loc.fromJson(json["loc"]),
-    name: json["name"],
-    ssn: json["ssn"],
-    phone: json["phone"],
-    educationDegree: json["educationDegree"],
-    courses: json["courses"] != null ? List<dynamic>.from(json["courses"]) : [],
-  );
+  factory TeacherData.fromJson(Map<String, dynamic> json) {
+    return TeacherData(
+      id: json["id"],
+      // استخدام toLocal لضمان عدم ترحيل التاريخ لليوم السابق
+      joinDate: json["joinDate"] == null ? null : DateTime.parse(json["joinDate"]).toLocal(),
+      loc: json["loc"] == null ? null : Loc.fromJson(json["loc"]),
+      name: json["name"],
+      ssn: json["ssn"],
+      phone: json["phone"],
+      educationDegree: json["educationDegree"],
+      courses: json["courses"],
+    );
+  }
 }
 
 class Loc {
   int? id;
   String? name;
-  String? address;
-
-  Loc({this.id, this.name, this.address});
-
-  factory Loc.fromJson(Map<String, dynamic> json) => Loc(
-    id: json["id"],
-    name: json["name"],
-    address: json["address"],
-  );
+  Loc({this.id, this.name});
+  factory Loc.fromJson(Map<String, dynamic> json) => Loc(id: json["id"], name: json["name"]);
 }
