@@ -11,6 +11,7 @@ class SessionsScreen extends StatefulWidget {
 class _SessionsScreenState extends State<SessionsScreen> {
   bool _isLoading = true;
   List<SessionRecord> _sessions = [];
+  final Color kActiveBlue = const Color(0xFF1976D2);
 
   @override
   void initState() {
@@ -21,7 +22,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Future<void> _fetchSessions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id') ?? "6"; // الافتراضي 6 حسب الصور
+      String? id = prefs.getString('user_id') ?? "6";
 
       final response = await http.get(
         Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetSessionRecord?emp_id=$id'),
@@ -42,62 +43,51 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Widget build(BuildContext context) {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
-        : ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        _buildHeaderCard(),
-        const SizedBox(height: 10),
-        _buildSessionsTable(),
-      ],
-    );
-  }
-
-  // كارد العنوان العلوي (جدول الشيخ)
-  Widget _buildHeaderCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: const Text(
-        "جدول الشيخ",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Almarai',
-          color: Color(0xFF2E3542),
-        ),
-        textAlign: TextAlign.right,
-      ),
-    );
-  }
-
-  // الجدول المطابق للسكرين شوت
-  Widget _buildSessionsTable() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor: MaterialStateProperty.all(const Color(0xFFF9FAFB)),
-          horizontalMargin: 15,
-          columnSpacing: 25,
-          columns: const [
-            DataColumn(label: Text('اليوم', style: _headerStyle)),
-            DataColumn(label: Text('الساعة', style: _headerStyle)),
-            DataColumn(label: Text('المجموعة', style: _headerStyle)),
-            DataColumn(label: Text('المستوى', style: _headerStyle)),
-            DataColumn(label: Text('المكتب', style: _headerStyle)),
-          ],
-          rows: _buildRows(),
-        ),
+        : Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "مواعيد المجموعات",
+            style: TextStyle(
+              color: kActiveBlue,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Almarai',
+            ),
+          ),
+          const SizedBox(height: 15),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(const Color(0xFFF8FAFC)),
+                      columns: const [
+                        DataColumn(label: Text('اليوم', style: _headerStyle)),
+                        DataColumn(label: Text('الساعة', style: _headerStyle)),
+                        DataColumn(label: Text('المجموعة', style: _headerStyle)),
+                        DataColumn(label: Text('المستوى', style: _headerStyle)),
+                      ],
+                      rows: _buildRows(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -112,7 +102,6 @@ class _SessionsScreenState extends State<SessionsScreen> {
             DataCell(Text(session.hour ?? "", style: _cellStyle)),
             DataCell(Text(record.name ?? "", style: _cellStyle)),
             DataCell(Text(record.level?.name ?? "", style: _cellStyle)),
-            DataCell(Text(record.loc?.name ?? "", style: _cellStyle)),
           ]));
         }
       }
@@ -121,15 +110,15 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 
   static const TextStyle _headerStyle = TextStyle(
-    fontFamily: 'Almarai',
+    color: Color(0xFF64748B),
     fontWeight: FontWeight.bold,
-    color: Color(0xFF718096),
+    fontFamily: 'Almarai',
     fontSize: 13,
   );
 
   static const TextStyle _cellStyle = TextStyle(
+    color: Color(0xFF334155),
     fontFamily: 'Almarai',
-    color: Color(0xFF2E3542),
-    fontSize: 13,
+    fontSize: 12,
   );
 }

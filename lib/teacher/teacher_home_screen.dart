@@ -4,10 +4,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'teacher_model.dart';
-import 'attendance_screen.dart'; // استيراد شاشة الحضور الجديدة
-import 'package:project1/teacher/curriculum/curriculum_screen.dart'; // تأكد من المسار الصحيح لملفك
-// --- الألوان الثابتة ---
+import 'attendance_screen.dart';
+import 'package:project1/teacher/curriculum/curriculum_screen.dart';
 import 'sessions_screen.dart';
+import 'groups_screen.dart';
+
+// --- الألوان الثابتة ---
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -70,16 +72,17 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     super.initState();
     _loadInitialData();
   }
+
   Future<void> _loadInitialData() async {
     if (_currentTitle == "البيانات الشخصية") {
       await _fetchTeacherProfile();
     } else if (_currentTitle == "مواعيد الدرس") {
       await _fetchSessions();
-    } else if (_currentTitle == "المنهج / المقرر") {
-      // أضف هذا السطر لإيقاف الدائرة فوراً لأن البيانات ثابتة
+    } else if (_currentTitle == "المنهج / المقرر" || _currentTitle == "المجموعات" || _currentTitle == "الرئيسية") {
       setState(() => _isLoading = false);
     }
   }
+
   Future<void> _fetchTeacherProfile() async {
     setState(() => _isLoading = true);
     try {
@@ -133,12 +136,15 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       ),
     );
   }
+
   Widget _buildBody() {
     if (_currentTitle == "البيانات الشخصية") return _buildProfileBody();
     if (_currentTitle == "مواعيد الدرس") return _buildSessionsBody();
-    if (_currentTitle == "المنهج / المقرر") return CurriculumScreen(); // الربط هنا
+    if (_currentTitle == "المنهج / المقرر") return CurriculumScreen();
+    if (_currentTitle == "المجموعات") return GroupsScreen(); // استدعاء شاشة المجموعات المتصلة بالـ API
     return Center(child: Text("قريباً: $_currentTitle", style: TextStyle(fontFamily: 'Almarai', color: darkBlue)));
   }
+
   // --- واجهة البيانات الشخصية ---
   Widget _buildProfileBody() {
     String formattedDate = "---";
@@ -229,8 +235,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   static const TextStyle _cellStyle = TextStyle(fontFamily: 'Almarai', color: Color(0xFF2E3542), fontSize: 13);
   static const TextStyle _cellStyleBold = TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 13);
 
-// --- السايدبار المطور للربط مع شاشة الحضور ---
-  // ابحث عن هذه الدالة في ملف teacher_home_screen.dart وحدثها بهذا الكود
   Widget _buildTeacherSidebar(BuildContext context) {
     return Drawer(
       backgroundColor: Colors.white,
@@ -253,8 +257,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               children: [
                 _buildSidebarItem(Icons.home_outlined, "الرئيسية"),
                 _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
-
-                // المنهج / المقرر (تأكد أن الاسم مطابق لما في _buildBody)
                 _buildSidebarItem(Icons.menu_book_outlined, "المنهج / المقرر"),
 
                 _buildSidebarItem(
@@ -285,9 +287,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       ),
     );
   }
-  // --- دالة بناء عنصر القائمة (Sidebar Item) ---
+
   Widget _buildSidebarItem(IconData icon, String title, {Color? color, bool isLogout = false, bool isPushScreen = false, Widget? screen}) {
-    // تحديد ما إذا كان العنصر هو المختار حالياً لتغيير لونه (باستثناء الحالات الخاصة)
     bool isSelected = _currentTitle == title;
 
     return ListTile(
@@ -305,26 +306,25 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       ),
       onTap: () {
         if (isLogout) {
-          _showLogoutDialog(); // استدعاء ديالوج تسجيل الخروج
+          _showLogoutDialog();
         } else if (isPushScreen && screen != null) {
-          // فتح شاشة مستقلة (مثل شاشة الحضور) وإغلاق السايدبار
           Navigator.pop(context);
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => screen),
           );
         } else {
-          // تبديل المحتوى داخل نفس الشاشة الرئيسية (Home)
           setState(() {
             _currentTitle = title;
             _isLoading = true;
           });
-          Navigator.pop(context); // إغلاق السايدبار
-          _loadInitialData(); // إعادة تحميل البيانات بناءً على التبويب الجديد
+          Navigator.pop(context);
+          _loadInitialData();
         }
       },
     );
   }
+
   void _showLogoutDialog() {
     showDialog(
       context: context,

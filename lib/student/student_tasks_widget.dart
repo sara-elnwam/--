@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-// تأكدي من عمل import لملف الموديل هنا
  import 'task_model.dart';
 
 class StudentTasksWidget extends StatelessWidget {
-  final List<Datum> tasksList; // استخدام نوع البيانات من الموديل
+  final List<Datum> tasksList;
   final bool isLoading;
 
   const StudentTasksWidget({super.key, required this.tasksList, required this.isLoading});
@@ -20,7 +19,6 @@ class StudentTasksWidget extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = tasksList[index];
 
-        // الوصول للبيانات أصبح أسهل عن طريق النقطة . بدل الـ [ ]
         final studentExam = (item.studentExams != null && item.studentExams!.isNotEmpty)
             ? item.studentExams![0]
             : null;

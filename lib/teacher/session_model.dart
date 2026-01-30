@@ -1,8 +1,77 @@
 import 'dart:convert';
 
+// 1. دالة التحويل لشاشة المواعيد
 List<SessionRecord> sessionRecordFromJson(String str) =>
     List<SessionRecord>.from(json.decode(str).map((x) => SessionRecord.fromJson(x)));
 
+// 2. موديل جلب المجموعات
+class GroupData {
+  String? levelName;
+  int? levelId;
+  String? loc;
+  List<GroupSession>? groupSessions;
+  String? emp;
+  int? empId;
+  int? groupId;
+  String? groupName;
+  int? studentCount;
+
+  GroupData({
+    this.levelName,
+    this.levelId,
+    this.loc,
+    this.groupSessions,
+    this.emp,
+    this.empId,
+    this.groupId,
+    this.groupName,
+    this.studentCount,
+  });
+
+  factory GroupData.fromJson(Map<String, dynamic> json) {
+    return GroupData(
+      levelName: json["levelname"]?.toString() ?? "المستوى",
+      levelId: json["levelId"],
+      loc: json["loc"]?.toString() ?? "غير محدد",
+      emp: json["emp"]?.toString(),
+      empId: json["empid"],
+      groupId: json["groupID"] ?? json["id"],
+      groupName: json["groupName"]?.toString() ?? "بدون اسم",
+      studentCount: json["studentCount"] ?? 0,
+      groupSessions: json["groupSessions"] == null
+          ? null
+          : List<GroupSession>.from(json["groupSessions"].map((x) => GroupSession.fromJson(x))),
+    );
+  }
+}
+
+// 3. موديل الطالب (تم التحديث ليكون أكثر مرونة)
+class Student {
+  final int id;
+  final String name;
+  final String status;
+
+  Student({
+    required this.id,
+    required this.name,
+    required this.status,
+  });
+
+  factory Student.fromJson(Map<String, dynamic> json) {
+    return Student(
+      // يتحقق من id أو studentId
+      id: json["id"] ?? json["studentId"] ?? 0,
+      // يتحقق من name أو studentName
+      name: json["name"] ?? json["studentName"] ?? "اسم غير معروف",
+      // يتحقق من الحالة سواء كانت Boolean أو String
+      status: (json["active"] == true || json["status"] == "Active")
+          ? "نشط"
+          : "غير نشط",
+    );
+  }
+}
+
+// 4. باقي موديلات السجلات
 class SessionRecord {
   int? id;
   Level? level;
@@ -11,7 +80,14 @@ class SessionRecord {
   String? name;
   bool? active;
 
-  SessionRecord({this.id, this.level, this.loc, this.groupSessions, this.name, this.active});
+  SessionRecord({
+    this.id,
+    this.level,
+    this.loc,
+    this.groupSessions,
+    this.name,
+    this.active
+  });
 
   factory SessionRecord.fromJson(Map<String, dynamic> json) => SessionRecord(
     id: json["id"],
@@ -27,11 +103,13 @@ class SessionRecord {
 
 class Level {
   String? name;
+  Level({this.name});
   factory Level.fromJson(Map<String, dynamic> json) => Level(name: json["name"]);
 }
 
 class Location {
   String? name;
+  Location({this.name});
   factory Location.fromJson(Map<String, dynamic> json) => Location(name: json["name"]);
 }
 
@@ -43,19 +121,18 @@ class GroupSession {
 
   factory GroupSession.fromJson(Map<String, dynamic> json) => GroupSession(
     day: json["day"],
-    hour: json["hour"],
+    hour: json["hour"]?.toString(),
   );
 
-  // تحويل رقم اليوم لاسم اليوم (حسب السكرين شوت المرفقة 1=السبت)
   String get dayName {
     switch (day) {
-      case 1: return "السبت";
-      case 2: return "الأحد";
-      case 3: return "الإثنين";
-      case 4: return "الثلاثاء";
-      case 5: return "الأربعاء";
-      case 6: return "الخميس";
-      case 7: return "الجمعة";
+      case 0: return "السبت";
+      case 1: return "الأحد";
+      case 2: return "الإثنين";
+      case 3: return "الثلاثاء";
+      case 4: return "الأربعاء";
+      case 5: return "الخميس";
+      case 6: return "الجمعة";
       default: return "";
     }
   }

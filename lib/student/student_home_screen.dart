@@ -9,7 +9,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http_parser/http_parser.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-// الثوابت البصرية
 const Color kPrimaryBlue = Color(0xFF07427C);
 const Color kSecondaryBlue = Color(0xFFEBF4FF);
 const Color kTextDark = Color(0xFF2E3542);
@@ -43,8 +42,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   bool _isExamsLoading = false;
   List<dynamic> coursesList = [];
   bool _isCoursesLoading = false;
-  String? token; // <--- Add this line
-  // قائمة أعمال الطالب وحالة التحميل
+  String? token;
   List<dynamic> studentTasksList = [];
   bool _isFileUploaded = false;
   bool _isAnswerSubmitted = false;
@@ -78,7 +76,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     super.dispose();
   }
 
-  // --- دالة اختبار الـ Endpoints ---
   Future<void> testAllEndpoints() async {
     String stId = studentFullData?['id']?.toString() ?? "5";
     String levelId = studentFullData?['levelId']?.toString() ?? "1";
@@ -103,7 +100,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     print("-----------------------------------");
   }
 
-  // --- دالات المساعدة ---
   String _getEvaluationText(dynamic value) {
     if (value == null) return "---";
     int? score = int.tryParse(value.toString());
@@ -119,7 +115,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     return days[dayNumber] ?? "";
   }
 
-  // --- جلب البيانات ---
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
     String? id = widget.loginData?['userId']?.toString() ??
@@ -167,11 +162,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('user_token');
 
-      // سحب المعرفات ديناميكياً من بيانات البروفايل
       String stId = studentFullData?['id']?.toString() ?? "5";
       String levelId = studentFullData?['levelId']?.toString() ?? "1";
 
-      // الرابط السحري اللي جاب البيانات
       final url = Uri.parse('$baseUrl/Student/GetAllTasksBsedOnType?Stid=$stId&Levelid=$levelId&TypeId=-3');
 
       final headers = {
@@ -186,7 +179,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         setState(() {
-          // الوصول لمفتاح data مباشرة كما يظهر في الـ Log
           studentTasksList = decoded['data'] ?? [];
           _taskErrorMessage = studentTasksList.isEmpty ? "لا يوجد أعمال حالية" : null;
         });
@@ -206,7 +198,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('user_token');
 
-      // تجهيز الجسم كما هو مطلوب في Swagger بالضبط
       Map<String, dynamic> body = {
         "id": studentFullData!['id'],
         "name": studentFullData!['name'],

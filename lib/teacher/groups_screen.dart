@@ -1,0 +1,122 @@
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'session_model.dart';
+import 'group_details_dashboard.dart';
+class GroupsScreen extends StatefulWidget {
+  const GroupsScreen({super.key});
+
+  @override
+  _GroupsScreenState createState() => _GroupsScreenState();
+}
+
+class _GroupsScreenState extends State<GroupsScreen> {
+  List<GroupData> _groups = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchGroups();
+  }
+
+  Future<void> _fetchGroups() async {
+    try {
+      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Group/GetAllEmployeeGroups?EmpId=6'));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonData = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            _groups = (jsonData["data"] as List).map((x) => GroupData.fromJson(x)).toList();
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 16),
+          _groups.isEmpty
+              ? const Center(child: Text("لا توجد مجموعات حالياً"))
+              : _buildTable(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: const Text("المجموعات الخاصة بالشيخ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
+    );
+  }
+
+  Widget _buildTable() {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('اسم المستوى', style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold))),
+            DataColumn(label: Text('اسم المجموعة', style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold))),
+            DataColumn(label: Text('المكتب', style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold))),
+            DataColumn(label: Text('عدد الطلاب', style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold))),
+          ],
+          rows: _groups.map((group) {
+            return DataRow(cells: [
+              // داخل كود بناء الجدول في ملف groups_screen.dart
+              DataCell(
+                InkWell(
+                  onTap: () {
+                    // تمرير الـ levelId والـ groupId معاً للشاشة التالية
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GroupDetailsDashboard(
+                          groupId: group.groupId ?? 0,
+                          levelId: group.levelId ?? 0, // السطر المهم جداً
+                          groupName: group.groupName ?? "المجموعة",
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    child: Text(
+                      (group.levelName == null || group.levelName == "null")
+                          ? "المستوى"
+                          : group.levelName!,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                        fontFamily: 'Almarai',
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(Text(group.groupName ?? "---", style: const TextStyle(fontFamily: 'Almarai'))),
+              DataCell(Text(group.loc ?? "---", style: const TextStyle(fontFamily: 'Almarai'))),
+              DataCell(Center(child: Text("${group.studentCount ?? 0}", style: const TextStyle(fontFamily: 'Almarai')))),
+            ]);
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
