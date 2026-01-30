@@ -3,8 +3,13 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:open_filex/open_filex.dart';
-import 'session_model.dart'; // تأكد أن الملف موجود في مشروعك
-
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'session_model.dart';
+// استيراد ملف الحضور مع إعطائه لقب (attendance)
+import 'student_attendance_screen.dart' as attendance;
+import 'session_model.dart'; // هذا يحتوي على الـ Student الأساسي
+import 'grading_exams_screen.dart';
 class GroupDetailsDashboard extends StatefulWidget {
   final int groupId;
   final int levelId;
@@ -83,10 +88,26 @@ class _GroupDetailsDashboardState extends State<GroupDetailsDashboard> {
   }
 
   Widget _buildBodyContent() {
-    if (_selectedSection == "الطلاب") return _buildStudentsTable();
+    if (_selectedSection == "الطلاب") {
+      return _buildStudentsTable();
+    }
+    else if (_selectedSection == "تسجيل الحضور") {
+      final attendanceStudents = _students.map((s) => attendance.Student(id: s.id, name: s.name)).toList();
+      return attendance.StudentAttendanceScreen(
+        groupId: widget.groupId,
+        students: attendanceStudents,
+      );
+    }
+// ابحثي عن هذا الجزء في ملف group_details_dashboard.dart وقومي بتعديله
+    else if (_selectedSection == "تصحيح الاختبارات") {
+      return GradingExamsScreen(
+        groupId: widget.groupId,
+        levelId: widget.levelId, // تأكدي من تمرير الـ levelId هنا
+        students: _students,
+      );
+    }
     return Center(child: Text("شاشة $_selectedSection قيد التطوير"));
   }
-
   Widget _buildStudentsTable() {
     return Column(
       children: [
@@ -136,7 +157,6 @@ class _GroupDetailsDashboardState extends State<GroupDetailsDashboard> {
   }
 }
 
-// --- شاشة بيانات الطالب المعدلة للمحاذاة الدقيقة ---
 class StudentProfileScreen extends StatefulWidget {
   final int studentId;
   const StudentProfileScreen({super.key, required this.studentId});
@@ -154,22 +174,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     super.initState();
     _fetchDetails();
   }
-// دالة ذكية لمعالجة التاريخ ومنع ظهور 1970-01-01
+
   String _formatDate(dynamic dateValue) {
-    // 1. لو القيمة نل أو نص "null" أو فاضية، رجعي -- فوراً
     if (dateValue == null || dateValue.toString().isEmpty || dateValue.toString().toLowerCase() == "null") {
       return "--";
     }
-
     try {
       String dateStr = dateValue.toString();
-
-      // 2. لو التاريخ راجع بقيمة صفرية أو بداية التقويم (التي تسبب ظهور 1970)
       if (dateStr.startsWith("0001") || dateStr.startsWith("1970")) {
         return "--";
       }
-
-      // 3. قص التاريخ لأول 10 رموز فقط (YYYY-MM-DD)
       if (dateStr.contains("T")) {
         return dateStr.split("T")[0];
       }
@@ -178,6 +192,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       return "--";
     }
   }
+
   Future<void> _fetchDetails() async {
     final url = "https://nour-al-eman.runasp.net/api/Student/GetById?id=${widget.studentId}";
     try {
@@ -233,7 +248,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   _buildDataRow("مجموعة :", _data!["group"]?["name"] ?? "--"),
                   _buildDataRow("المستوى :", _data!["level"]?["name"] ?? "--"),
                   _buildDataRow("اسم المعلم :", _data!["group"]?["emp"]?["name"] ?? "--"),
-                  _buildDataRow("الحضور :", _data!["attendanceType"]?.toString() ?? "--"), // هيقرأ "اونلاين" زي ما في السيرفر
+                  _buildDataRow("الحضور :", _data!["attendanceType"]?.toString() ?? "--"),
                   _buildDataRow("موعد الحلقة :", _formatSessions(_data!["group"]?["groupSessions"])),
                 ],
               ),
@@ -258,15 +273,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           Padding(
             padding: const EdgeInsets.all(15),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, // يوزع الأيقونة والعنوان
               children: [
-                Row(
-                  children: [
-                    Icon(icon, color: const Color(0xFF07427C), size: 22),
-                    const SizedBox(width: 8),
-                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
-                  ],
-                ),
+                Icon(icon, color: const Color(0xFF07427C), size: 22),
+                const SizedBox(width: 8),
+                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
               ],
             ),
           ),
@@ -286,19 +296,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // العنوان في اليمين
-          Text(
-            label,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          // القيمة في اليسار
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.left,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w500)),
+          Flexible(child: Text(value, textAlign: TextAlign.left, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87))),
         ],
       ),
     );
@@ -314,7 +313,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     }
   }
 }
-// --- شاشة السؤال الأسبوعي ---
+
 class WeeklyQuestionsScreen extends StatefulWidget {
   final int studentId;
   final String studentName;
@@ -374,8 +373,9 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
   }
 
   void _showGradingDialog(dynamic item, bool isGraded) {
-    final TextEditingController noteController = TextEditingController(text: isGraded ? (item["note_teacher"] ?? "") : "");
-    final TextEditingController gradeController = TextEditingController(text: item["grade"]?.toString() ?? "");
+    // نستخدم "note" و "grade" من المستوى الخارجي لـ item كما في الـ JSON
+    final TextEditingController noteController = TextEditingController(text: (item["note"] == null || item["note"] == "null") ? "" : item["note"].toString());
+    final TextEditingController gradeController = TextEditingController(text: (item["grade"] == null || item["grade"] == "null") ? "" : item["grade"].toString());
     final exam = item["exam"] ?? {};
     final int examId = exam["id"] ?? 0;
 
@@ -388,7 +388,6 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
           child: SingleChildScrollView(
             child: Container(
               padding: const EdgeInsets.all(24),
-              width: MediaQuery.of(context).size.width * 0.9,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,64 +396,36 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isGraded ? "التقييم" : "اضافة تقييم",
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
-                      IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                              child: const Icon(Icons.close, size: 16, color: Colors.black))
-                      ),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
+                      IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                     ],
                   ),
                   const SizedBox(height: 15),
-                  const Text("التعليق", style: TextStyle(fontSize: 16, color: Color(0xFF07427C), fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 10),
+                  const Text("التعليق", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: noteController,
-                    maxLines: 4,
-                    textAlign: TextAlign.right,
-                    decoration: InputDecoration(
-                      hintText: "اكتب هنا ...",
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                    ),
+                    maxLines: 3,
+                    decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: "اكتب هنا..."),
                   ),
                   const SizedBox(height: 20),
-                  Text.rich(
-                    TextSpan(
-                      text: isGraded ? "نقاط الطالب" : "ادخل نقاط الطالب هنا",
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
-                      children: const [TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontSize: 16))],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                  const Text("نقاط الطالب *", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: gradeController,
                     keyboardType: TextInputType.number,
-                    textAlign: TextAlign.right,
-                    decoration: InputDecoration(
-                      hintText: "ادخل نقاط الطالب هنا",
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                    ),
+                    decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: "ادخل النقاط"),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 25),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD17820),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD17820), padding: const EdgeInsets.symmetric(vertical: 15)),
                       onPressed: () {
                         _submitGrade(examId, gradeController.text, noteController.text);
                         Navigator.pop(context);
                       },
-                      child: Text(isGraded ? "إغلاق" : "إضافة",
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text("حفظ التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   )
                 ],
@@ -465,7 +436,6 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -536,7 +506,7 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
   }
 }
 
-// --- شاشة الأبحاث ---
+// --- شاشة الأبحاث المعدلة بالكامل لتطابق تصميم الويب المطلوب ---
 class StudentExamsScreen extends StatefulWidget {
   final int studentId;
   final String studentName;
@@ -585,24 +555,16 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
           "note": note,
         }),
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم التقييم بنجاح"), backgroundColor: Colors.green));
-        _fetch();
-      }
+      _fetch();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ خطأ في الإرسال")));
+      debugPrint("Error: $e");
     }
   }
-
   void _showGradingDialog(dynamic item, bool isGraded) {
-    final TextEditingController noteController = TextEditingController(text: item["note"] ?? "");
-    final TextEditingController gradeController = TextEditingController(text: item["grade"]?.toString() ?? "");
-    int examId = 0;
-    if (item["examId"] != null) {
-      examId = item["examId"];
-    } else if (item["exam"] != null && item["exam"]["id"] != null) {
-      examId = item["exam"]["id"];
-    }
+    final TextEditingController noteController = TextEditingController(text: item["note"]?.toString() == "null" ? "" : (item["note"] ?? ""));
+    final TextEditingController gradeController = TextEditingController(text: item["grade"]?.toString() == "null" ? "" : (item["grade"]?.toString() ?? ""));
+    final exam = item["exam"] ?? {};
+    final int examId = exam["id"] ?? 0;
 
     showDialog(
       context: context,
@@ -611,8 +573,9 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
         child: Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: SingleChildScrollView(
-            child: Padding(
+            child: Container(
               padding: const EdgeInsets.all(24),
+              width: MediaQuery.of(context).size.width * 0.9,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,7 +583,8 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(isGraded ? "تعديل تقييم البحث" : "تقييم البحث", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
+                      Text(isGraded ? "التقييم" : "اضافة تقييم",
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
                       IconButton(
                           onPressed: () => Navigator.pop(context),
                           icon: Container(
@@ -631,21 +595,52 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
                     ],
                   ),
                   const SizedBox(height: 15),
-                  const Text("الملاحظة", style: TextStyle(fontSize: 14, color: Color(0xFF07427C), fontWeight: FontWeight.w500)),
-                  TextField(controller: noteController, maxLines: 3, decoration: InputDecoration(hintText: "اكتب ملاحظتك هنا", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-                  const SizedBox(height: 15),
-                  const Text("الدرجة", style: TextStyle(fontSize: 14, color: Color(0xFF07427C), fontWeight: FontWeight.w500)),
-                  TextField(controller: gradeController, keyboardType: TextInputType.number, decoration: InputDecoration(hintText: "ادخل الدرجة", border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-                  const SizedBox(height: 25),
+                  const Text("التعليق", style: TextStyle(fontSize: 16, color: Color(0xFF07427C), fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 4,
+                    textAlign: TextAlign.right,
+                    decoration: InputDecoration(
+                      hintText: "اكتب هنا ...",
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text.rich(
+                    TextSpan(
+                      text: isGraded ? "نقاط الطالب" : "ادخل نقاط الطالب هنا",
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+                      children: const [TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontSize: 16))],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: gradeController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.right,
+                    decoration: InputDecoration(
+                      hintText: "ادخل نقاط الطالب هنا",
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD17820), padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD17820),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                       onPressed: () {
                         _submitGrade(examId, gradeController.text, noteController.text);
                         Navigator.pop(context);
                       },
-                      child: const Text("حفظ التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text(isGraded ? "إغلاق" : "إضافة",
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   )
                 ],
@@ -657,30 +652,61 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
     );
   }
 
+  // استبدلي دالة _startDownload القديمة بهذه الدالة المعدلة والذكية
   Future<void> _startDownload(String? relativeUrl, String fileName) async {
+    // 1. التحقق من وجود رابط
     if (relativeUrl == null || relativeUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرابط غير متاح")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ لا يوجد ملف مرفوع لهذا البحث")));
       return;
     }
+
     try {
+      // 2. تكوين الرابط الصحيح (دمج الدومين مع المسار)
       String cleanPath = relativeUrl.replaceAll(r'\', '/').trim();
       if (!cleanPath.startsWith('/')) cleanPath = '/$cleanPath';
-      final String fullUrl = "https://nour-al-eman.runasp.net$cleanPath";
-      final String savePath = "/storage/emulated/0/Download/$fileName";
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري بدء التحميل...")));
-      await Dio().download(fullUrl, savePath);
+
+      // ملاحظة: جربي هذا الرابط أولاً، وإذا أعطى 404 يبقى الملف مش موجود على السيرفر فعلياً
+      String finalUrl = "https://nour-al-eman.runasp.net$cleanPath";
+
+      // فكرة ذكية للتجربة: لو عايزة تتأكدي إن الكود شغال، فكي التعليق عن السطر اللي جاي:
+      // finalUrl = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
+
+      // 3. تحديد مسار الحفظ (مجلد الـ Download العام)
+      String savePath = "/storage/emulated/0/Download/$fileName";
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⬇️ جاري بدء التحميل...")));
+
+      // 4. تنفيذ عملية التحميل
+      await Dio().download(
+        finalUrl,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            debugPrint("Progress: ${(received / total * 100).toStringAsFixed(0)}%");
+          }
+        },
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("✅ تم التحميل: $fileName"),
+          content: Text("✅ تم تحميل الملف في مجلد Download"),
           backgroundColor: Colors.green,
-          action: SnackBarAction(label: "فتح", textColor: Colors.white, onPressed: () => OpenFilex.open(savePath)),
+          action: SnackBarAction(
+              label: "فتح الملف",
+              textColor: Colors.white,
+              onPressed: () => OpenFilex.open(savePath)
+          ),
         ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ فشل التحميل")));
+      debugPrint("Download Error: $e");
+      if (mounted) {
+        // لو الخطأ 404 يبقى العيب من السيرفر مية مية
+        String msg = "❌ فشل التحميل: الملف غير موجود على السيرفر (404)";
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+      }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -689,55 +715,91 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
-          title: Text("أبحاث: ${widget.studentName}", style: const TextStyle(color: Colors.black, fontSize: 15)),
+          elevation: 0.5,
+          leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
+          title: const Text("ابحاث الطالب", style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _tasks.isEmpty
             ? const Center(child: Text("لا توجد أبحاث لهذا الطالب"))
-            : ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: _tasks.length,
-          itemBuilder: (context, index) {
-            final item = _tasks[index];
-            final exam = item["exam"] ?? {};
-            final bool isGraded = item["grade"] != null;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: isGraded ? Colors.green : Colors.red, width: 1.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  InkWell(
-                    onTap: () => _showGradingDialog(item, isGraded),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: const Color(0xFF07427C).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text(isGraded ? "رؤية التقييم" : "تقييم البحث",
-                          style: const TextStyle(color: Color(0xFF07427C), fontWeight: FontWeight.bold, fontSize: 12)),
+            : Column(
+          children: [
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 15),
+                itemCount: _tasks.length,
+                itemBuilder: (context, index) {
+                  final item = _tasks[index];
+                  final exam = item["exam"] ?? {};
+                  final bool isGraded = item["grade"] != null;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 15),
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: isGraded ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                          width: 1.5
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.download_for_offline, color: Color(0xFFD17820), size: 28),
-                    onPressed: () => _startDownload(exam["url"], "${exam["name"] ?? "research"}.pdf"),
-                  ),
-                  const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(exam["name"] ?? "بدون اسم", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      Text(isGraded ? "تم التقييم" : "بانتظار التقييم", style: TextStyle(fontSize: 10, color: isGraded ? Colors.green : Colors.red)),
-                    ],
-                  ),
-                ],
+                    child: Row(
+                      children: [
+                        // 1. زر التقييم (أقصى اليمين في RTL)
+                        InkWell(
+                          onTap: () => _showGradingDialog(item, isGraded),
+                          child: Text(
+                            isGraded ? "رؤية التقييم" : "تقييم البحث",
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF07427C),
+                                decoration: TextDecoration.underline
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        // 2. أيقونة التحميل
+                        InkWell(
+                          onTap: () => _startDownload(exam["url"], "${exam["name"] ?? "research"}.pdf"),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.download_sharp, color: Color(0xFFD17820), size: 20),
+                              const SizedBox(width: 4),
+                              const Text("تحميل", style: TextStyle(color: Color(0xFFD17820), fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        // 3. الوصف
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            "الوصف: ${exam["description"] ?? "--"}",
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Spacer(),
+                        // 4. الاسم (أقصى اليسار في RTL)
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            "الإسم: ${exam["name"] ?? "--"}",
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

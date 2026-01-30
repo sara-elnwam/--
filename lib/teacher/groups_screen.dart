@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session_model.dart';
 import 'group_details_dashboard.dart';
+
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -78,17 +79,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
           ],
           rows: _groups.map((group) {
             return DataRow(cells: [
-              // داخل كود بناء الجدول في ملف groups_screen.dart
               DataCell(
                 InkWell(
                   onTap: () {
-                    // تمرير الـ levelId والـ groupId معاً للشاشة التالية
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => GroupDetailsDashboard(
                           groupId: group.groupId ?? 0,
-                          levelId: group.levelId ?? 0, // السطر المهم جداً
+                          levelId: group.levelId ?? 0,
                           groupName: group.groupName ?? "المجموعة",
                         ),
                       ),
