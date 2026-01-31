@@ -161,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
           } else {
             userData = Map<String, dynamic>.from(decodedBody);
           }
-
+          final responseData = jsonDecode(response.body);
           final prefs = await SharedPreferences.getInstance();
 
           // التعديل الجوهري هنا: السيرفر يرسلuserId وليس id
@@ -352,32 +352,32 @@ class _UserTypeScreenState extends State<UserTypeScreen> {
     );
   }
 
-Widget _buildTypeCard(String title, String desc, IconData icon, String type) {
-  bool isSelected = selectedType == type;
-  return GestureDetector(
-    onTap: () => _handleTypeSelection(type), // الانتقال الفوري
-    child: Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isSelected ? primaryOrange.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade200, width: isSelected ? 2 : 1),
+  Widget _buildTypeCard(String title, String desc, IconData icon, String type) {
+    bool isSelected = selectedType == type;
+    return GestureDetector(
+      onTap: () => _handleTypeSelection(type), // الانتقال الفوري
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryOrange.withOpacity(0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade200, width: isSelected ? 2 : 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(color: isSelected ? primaryOrange : Colors.grey.shade100, shape: BoxShape.circle),
+                child: Icon(icon, color: isSelected ? Colors.white : darkBlue)
+            ),
+            SizedBox(width: 15),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue)), Text(desc, style: TextStyle(fontSize: 13, color: greyText))])),
+            if (isSelected) Icon(Icons.check_circle, color: primaryOrange),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(color: isSelected ? primaryOrange : Colors.grey.shade100, shape: BoxShape.circle),
-              child: Icon(icon, color: isSelected ? Colors.white : darkBlue)
-          ),
-          SizedBox(width: 15),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue)), Text(desc, style: TextStyle(fontSize: 13, color: greyText))])),
-          if (isSelected) Icon(Icons.check_circle, color: primaryOrange),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }
 
 

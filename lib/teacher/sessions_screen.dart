@@ -22,7 +22,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Future<void> _fetchSessions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id') ?? "6";
+      String? id = prefs.getString('user_id') ?? "";
 
       final response = await http.get(
         Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetSessionRecord?emp_id=$id'),

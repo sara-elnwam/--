@@ -30,7 +30,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String empId = prefs.getString('user_id') ?? "6";
+      String empId = prefs.getString('user_id') ?? "";
       final url = 'https://nour-al-eman.runasp.net/api/Locations/GetAllEmployeeAttendanceById?EmpId=$empId';
       final response = await http.get(Uri.parse(url));
 

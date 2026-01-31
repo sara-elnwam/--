@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'session_model.dart';
 import 'group_details_dashboard.dart';
@@ -21,9 +22,31 @@ class _GroupsScreenState extends State<GroupsScreen> {
     _fetchGroups();
   }
 
+// 2. تعديل دالة _fetchGroups لتصبح هكذا:
   Future<void> _fetchGroups() async {
     try {
-      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Group/GetAllEmployeeGroups?EmpId=6'));
+      final prefs = await SharedPreferences.getInstance();
+
+      // هنا بنجيب الـ ID اللي اتخزن وقت عمل الـ Login
+      // تأكدي أن المفتاح 'user_id' هو نفس المفتاح المستخدم في صفحة الـ Login
+      String empId = prefs.getString('user_id') ?? ""; // شلنا الـ 6 تماماً
+      if (empId.isEmpty) {
+        // التعامل مع الحالة دي (زي إرجاع المستخدم للوجين)
+      }
+
+      print("DEBUG: Current Employee ID fetching groups is: $empId");
+
+      // إذا لم يجد ID (مثلاً أول مرة يفتح التطبيق أو مسح البيانات)
+      if (empId == null) {
+        print("خطأ: لم يتم العثور على ID للمعلم");
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await http.get(
+          Uri.parse('https://nour-al-eman.runasp.net/api/Group/GetAllEmployeeGroups?EmpId=$empId')
+      );
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonData = json.decode(response.body);
         if (mounted) {
@@ -34,6 +57,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         }
       }
     } catch (e) {
+      print("Error fetching groups: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
