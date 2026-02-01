@@ -151,6 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final dynamic decodedBody = jsonDecode(response.body);
           Map<String, dynamic> userData;
 
+          // التعامل مع حالة إذا كان السيرفر يرسل قائمة أو كائن واحد
           if (decodedBody is List) {
             if (decodedBody.isNotEmpty) {
               userData = Map<String, dynamic>.from(decodedBody[0]);
@@ -161,20 +162,28 @@ class _LoginScreenState extends State<LoginScreen> {
           } else {
             userData = Map<String, dynamic>.from(decodedBody);
           }
-          final responseData = jsonDecode(response.body);
+
           final prefs = await SharedPreferences.getInstance();
 
-          // التعديل الجوهري هنا: السيرفر يرسلuserId وليس id
-          // قمنا بفحص كلاً منuserId و id لضمان الحصول على القيمة في كل الحالات
-          String idToSave = userData['userId']?.toString() ??
-              userData['id']?.toString() ??
-              userData['user_Id']?.toString() ?? "";
+
+          String idToSave = "";
+          if (userData['userId'] != null && userData['userId'].toString().isNotEmpty) {
+            idToSave = userData['userId'].toString();
+          } else if (userData['id'] != null && userData['id'].toString().isNotEmpty) {
+            idToSave = userData['id'].toString();
+          } else {
+            idToSave = userData['user_Id']?.toString() ?? "";
+          }
+
+          // طباعة للتأكد في الـ Console أثناء التشغيل
+          debugPrint("DEBUG: ID being saved is: $idToSave");
 
           await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
-          await prefs.setString('user_id', idToSave); // حفظنا المعرف الحقيقي (مثل 1294)
+          await prefs.setString('user_id', idToSave);
           await prefs.setString('loginData', jsonEncode(userData));
           await prefs.setBool('is_logged_in', true);
 
+          // تحديد نوع المستخدم للتحويل للشاشة المناسبة
           int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
 
           Widget nextScreen;
@@ -188,7 +197,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai'))),
+              const SnackBar(
+                content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai')),
+                backgroundColor: Colors.green,
+              ),
             );
 
             Navigator.of(context).pushReplacement(
@@ -206,6 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
   }
+
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -395,47 +408,31 @@ Future<void> _handleRegistration({
       body: jsonEncode(data),
     );
 
-    // طباعة استجابة التسجيل بالكامل
     logger.v("API_RESPONSE: Code ${response.statusCode} | Body: ${response.body}");
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        final prefs = await SharedPreferences.getInstance();
+      // تعديل هام: لا نقوم بحفظ البيانات هنا ولا نقوم بعمل Login تلقائي بالـ GUID
+      // فقط ننتقل لصفحة النجاح، ومنها المستخدم يعود للـ Login
+      Navigator.push(context, MaterialPageRoute(builder: (context) => SuccessScreen()));
 
-        // توحيد جلب الـ ID سواء كان اسمه id أو userId من السيرفر
-        String finalId = responseData['userId']?.toString() ?? responseData['id']?.toString() ?? "";
-
-        await prefs.setString('user_token', responseData['token'] ?? "");
-        await prefs.setString('user_id', finalId); // توحيد المفتاح ليكون user_id
-        await prefs.setString('loginData', jsonEncode(responseData));
-        await prefs.setBool('is_logged_in', true);
-
-        Navigator.push(context, MaterialPageRoute(builder: (context) => SuccessScreen()));
-      }
-    }else {
+    } else {
       logger.e("API_ERROR: ${response.statusCode} | Body: ${response.body}");
-
       String displayError = "فشل التسجيل: تفقد البيانات المدخلة";
       try {
         var body = jsonDecode(response.body);
         if (body['message'] != null) {
           displayError = body['message'].toString();
-        } else if (body['error'] != null) {
-          displayError = body['error'].toString();
-        } else if (body['errors'] != null) {
-          displayError = "يرجى مراجعة الحقول المطلوبة";
         }
       } catch(_) {}
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(displayError), backgroundColor: Colors.red, duration: Duration(seconds: 4)),
+        SnackBar(content: Text(displayError), backgroundColor: Colors.red),
       );
     }
   } catch (e) {
-    logger.e("CONNECTION_ERROR: $e");
+    logger.e("FATAL_ERROR_REG: $e");
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("خطأ في الاتصال بالإنترنت"), backgroundColor: Colors.red),
+      SnackBar(content: Text("حدث خطأ غير متوقع"), backgroundColor: Colors.red),
     );
   }
 }

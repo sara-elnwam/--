@@ -32,7 +32,10 @@ class TeacherData {
     return TeacherData(
       id: json["id"],
       // استخدام toLocal لضمان عدم ترحيل التاريخ لليوم السابق
-      joinDate: json["joinDate"] == null ? null : DateTime.parse(json["joinDate"]).toLocal(),
+      // في ملف teacher_model.dart
+      joinDate: (json["joinDate"] == null || json["joinDate"] == "0001-01-01T00:00:00")
+          ? null
+          : DateTime.parse(json["joinDate"]),
       loc: json["loc"] == null ? null : Loc.fromJson(json["loc"]),
       name: json["name"],
       ssn: json["ssn"],

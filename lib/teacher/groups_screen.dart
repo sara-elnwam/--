@@ -27,34 +27,42 @@ class _GroupsScreenState extends State<GroupsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // هنا بنجيب الـ ID اللي اتخزن وقت عمل الـ Login
-      // تأكدي أن المفتاح 'user_id' هو نفس المفتاح المستخدم في صفحة الـ Login
-      String empId = prefs.getString('user_id') ?? ""; // شلنا الـ 6 تماماً
-      if (empId.isEmpty) {
-        // التعامل مع الحالة دي (زي إرجاع المستخدم للوجين)
-      }
+      // 1. هنجيب الـ ID اللي اتخزن فعلياً في الـ Login
+      String empId = prefs.getString('user_id') ?? "";
 
       print("DEBUG: Current Employee ID fetching groups is: $empId");
 
-      // إذا لم يجد ID (مثلاً أول مرة يفتح التطبيق أو مسح البيانات)
-      if (empId == null) {
-        print("خطأ: لم يتم العثور على ID للمعلم");
+      // 2. فحص بسيط للتأكد من وجود ID
+      if (empId.isEmpty) {
+        print("خطأ: لم يتم العثور على ID للمعلم في الـ SharedPreferences");
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
+      // 3. الطلب من السيرفر باستخدام الـ ID الديناميكي
       final response = await http.get(
           Uri.parse('https://nour-al-eman.runasp.net/api/Group/GetAllEmployeeGroups?EmpId=$empId')
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonData = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _groups = (jsonData["data"] as List).map((x) => GroupData.fromJson(x)).toList();
-            _isLoading = false;
-          });
+
+        // تأكدي أن السيرفر يرجع قائمة في "data"
+        if (jsonData["data"] != null) {
+          if (mounted) {
+            setState(() {
+              _groups = (jsonData["data"] as List)
+                  .map((x) => GroupData.fromJson(x))
+                  .toList();
+              _isLoading = false;
+            });
+          }
+        } else {
+          if (mounted) setState(() => _isLoading = false);
         }
+      } else {
+        print("Server Error: ${response.statusCode}");
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       print("Error fetching groups: $e");

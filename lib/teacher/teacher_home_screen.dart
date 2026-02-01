@@ -62,6 +62,7 @@ class TeacherHomeScreen extends StatefulWidget {
 }
 
 class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
+
   String _currentTitle = "البيانات الشخصية";
   bool _isLoading = true;
   TeacherData? teacherData;
@@ -91,17 +92,27 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       if (id == null) return;
       final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'));
       if (response.statusCode == 200) {
+        print("SERVER DATA: ${response.body}"); // السطر ده هيعرفنا السيرفر باعت إيه بالظبط
         setState(() => teacherData = TeacherModel.fromJson(jsonDecode(response.body)).data);
+
       }
     } catch (e) { debugPrint(e.toString()); }
     setState(() => _isLoading = false);
   }
 
+// داخل _TeacherHomeScreenState في ملف teacher_home_screen.dart
+
   Future<void> _fetchSessions() async {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id') ?? "6";
+      String? id = prefs.getString('user_id'); // شيلي الـ "6" الثابتة دي فوراً
+
+      if (id == null || id.isEmpty) {
+        print("Error: No User ID found");
+        return;
+      }
+
       final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetSessionRecord?emp_id=$id'));
       if (response.statusCode == 200) {
         setState(() => _sessions = sessionRecordFromJson(response.body));
@@ -109,7 +120,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     } catch (e) { debugPrint(e.toString()); }
     setState(() => _isLoading = false);
   }
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -161,7 +171,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _infoRow("اسم المعلم :", teacherData?.name ?? "---"),
           _infoRow("كود المعلم :", teacherData?.id?.toString() ?? "---"),
           _infoRow("المكتب التابع له :", teacherData?.loc?.name ?? "---"),
-          _infoRow("موعد الالتحاق :", formattedDate),
+          _infoRow("تاريخ الالتحاق", (teacherData?.joinDate != null && teacherData!.joinDate!.year > 1)
+              ? "${teacherData!.joinDate!.day.toString().padLeft(2, '0')}-${teacherData!.joinDate!.month.toString().padLeft(2, '0')}-${teacherData!.joinDate!.year}"
+              : "--"), // لو الداتا لسه مجاتش أو بـ 0 يظهر شرطتين
           _infoRow("المؤهل الدراسي :", teacherData?.educationDegree ?? "---"),
         ]),
         const SizedBox(height: 16),
