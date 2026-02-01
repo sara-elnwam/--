@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'student_tests_tab.dart';
 import 'student_attendance_tab.dart';
+import 'edit_student_screen.dart';
 
 const Color kPrimaryBlue = Color(0xFF07427C);
 const Color kTextDark = Color(0xFF2E3542);
@@ -64,13 +65,7 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
 
   String _getDayName(int day) {
     const days = {
-      1: "الإثنين",
-      2: "الثلاثاء",
-      3: "الأربعاء",
-      4: "الخميس",
-      5: "الجمعة",
-      6: "السبت",
-      7: "الأحد",
+      1: "الإثنين", 2: "الثلاثاء", 3: "الأربعاء", 4: "الخميس", 5: "الجمعة", 6: "السبت", 7: "الأحد",
     };
     return days[day] ?? "";
   }
@@ -104,9 +99,34 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0.5,
-          title: Text(widget.studentName,
-              style: const TextStyle(color: kTextDark, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
-          centerTitle: true,
+          centerTitle: false,
+          title: Text(
+            studentData?['name'] ?? widget.studentName, // استخدام الاسم المحدث من السيرفر إذا وجد
+            style: const TextStyle(
+              color: kTextDark,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Almarai',
+            ),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit_note, color: kPrimaryBlue, size: 24),
+              onPressed: () {
+                // التعديل هنا: تمرير studentData بالكامل
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditStudentScreen(
+                      studentId: widget.studentId,
+                      initialData: studentData, // البيانات القادمة من الـ API
+                    ),
+                  ),
+                ).then((_) => _fetchStudentInfo()); // إعادة جلب البيانات بعد التعديل
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           bottom: TabBar(
             controller: _tabController,
             labelColor: kPrimaryBlue,
