@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'employee_model.dart';
+import 'student_details/students_screen.dart';
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -232,7 +233,19 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 13,
               fontFamily: 'Almarai')),
-          onTap: () => isLogout ? _showLogoutDialog() : _onItemTapped(title),
+          onTap: () {
+            if (isLogout) {
+              _showLogoutDialog();
+            } else if (title == "الطلاب") {
+              Navigator.pop(context); // إغلاق السايد بار أولاً
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => StudentsScreen()),
+              );
+            } else {
+              _onItemTapped(title);
+            }
+          },
         ),
       ),
     );
