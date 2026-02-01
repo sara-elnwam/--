@@ -29,7 +29,6 @@ void main() async {
   if (isLoggedIn && loginDataString != null) {
     try {
       final Map<String, dynamic> responseData = jsonDecode(loginDataString);
-      // استخدام tryParse لضمان عدم حدوث خطأ إذا كانت القيمة نصية أو نل
       final int userType = int.tryParse(responseData['userType']?.toString() ?? "0") ?? 0;
 
       if (userType == 2) {
@@ -183,7 +182,6 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('loginData', jsonEncode(userData));
           await prefs.setBool('is_logged_in', true);
 
-          // تحديد نوع المستخدم للتحويل للشاشة المناسبة
           int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
 
           Widget nextScreen;

@@ -21,7 +21,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   String _currentTitle = "الصفحة الرئيسية";
   bool _isLoading = true;
   EmployeeData? employeeData;
-  Map<String, dynamic>? _rawResponse; // مخزن للبيانات الخام من السيرفر
+  Map<String, dynamic>? _rawResponse;
 
   @override
   void initState() {
@@ -48,7 +48,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         final Map<String, dynamic> decodedData = jsonDecode(response.body);
         final employeeModel = EmployeeModel.fromJson(decodedData);
         setState(() {
-          _rawResponse = decodedData['data']; // حفظ بيانات data للوصول للمسمى الوظيفي
+          _rawResponse = decodedData['data'];
           employeeData = employeeModel.data;
           _isLoading = false;
         });
@@ -95,7 +95,6 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           ? rawDate.substring(0, 10)
           : rawDate;
 
-      // جلب المسمى الوظيفي من البيانات الخام مباشرة لتجنب خطأ الموديل
       String jobTitle = "---";
       if (_rawResponse != null && _rawResponse!['employeeType'] != null) {
         jobTitle = _rawResponse!['employeeType']['name'] ?? "---";
@@ -237,7 +236,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             if (isLogout) {
               _showLogoutDialog();
             } else if (title == "الطلاب") {
-              Navigator.pop(context); // إغلاق السايد بار أولاً
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => StudentsScreen()),

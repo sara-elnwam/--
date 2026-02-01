@@ -5,9 +5,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 
-// استيراد مكتبات الفايربيز الضرورية
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; // هذا الملف الذي تم إنشاؤه بواسطة flutterfire configure
+import 'firebase_options.dart';
 
 import 'login_screen.dart';
 import 'student/student_home_screen.dart';
@@ -15,15 +14,12 @@ import 'teacher/teacher_home_screen.dart';
 import 'employee/employee_home_screen.dart';
 
 void main() async {
-  // التأكد من تهيئة روابط Flutter قبل أي عمليات إضافية
   WidgetsFlutterBinding.ensureInitialized();
 
-  // تهيئة Firebase باستخدام الإعدادات التي تم إنشاؤها
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // تهيئة أداة التحميل
   await FlutterDownloader.initialize(
       debug: true,
       ignoreSsl: true

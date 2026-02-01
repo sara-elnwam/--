@@ -1,18 +1,16 @@
 import 'dart:convert';
 
-// دالة لتحويل النص القادم من السيرفر إلى قائمة طلاب
-// دالة لمعالجة القائمة القادمة من السيرفر
+
 List<StudentModel> studentsFromJson(String str) {
   final jsonData = json.decode(str);
-  // السيرفر يرسل البيانات مباشرة كـ List بناءً على الصور
   return List<StudentModel>.from(jsonData.map((x) => StudentModel.fromJson(x)));
 }
 
 class StudentModel {
   int? id;
   DateTime? joinDate;
-  String? studentType; // نوع الطالب (مثلاً: صورة، عادي)
-  String? paymentType; // طريقة الدفع
+  String? studentType;
+  String? paymentType;
   String? documentType;
   String? typeInfamily;
   Loc? loc;

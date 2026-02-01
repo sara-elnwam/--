@@ -23,7 +23,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
     _fetchStudentsData();
   }
 
-  // جلب البيانات
+
   Future<void> _fetchStudentsData() async {
     setState(() => _isLoading = true);
     try {
@@ -54,7 +54,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
-  // دالة تغيير كلمة المرور
   Future<void> _updatePassword(int studentId, String newPassword) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -84,13 +83,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
-  // دالة الحذف (Deactivate) بناءً على الصور المرفقة
   Future<void> _deleteStudent(int studentId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      // الرابط المستخرج من صورة الـ Network
+
       final url = Uri.parse('https://nour-al-eman.runasp.net/api/Account/DeActivate?id=$studentId&type=0');
 
       final response = await http.post(
@@ -103,7 +101,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
       if (response.statusCode == 200) {
         _showSnackBar("تم حذف الطالب بنجاح", Colors.green);
-        _fetchStudentsData(); // إعادة تحميل القائمة بعد الحذف
+        _fetchStudentsData();
       } else {
         throw Exception();
       }
@@ -118,7 +116,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
-  // بوب اب تغيير كلمة المرور
   void _showResetPasswordDialog(int studentId, String studentName) {
     final TextEditingController _passController = TextEditingController();
     final TextEditingController _confirmPassController = TextEditingController();
@@ -173,7 +170,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
-  // بوب اب تأكيد الحذف
   void _showDeleteConfirmDialog(int studentId) {
     showDialog(
       context: context,

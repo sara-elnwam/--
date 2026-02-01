@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'student_tests_tab.dart';
+import 'student_attendance_tab.dart';
 
 const Color kPrimaryBlue = Color(0xFF07427C);
 const Color kTextDark = Color(0xFF2E3542);
@@ -29,7 +31,12 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
     _fetchStudentInfo();
   }
 
-  // تنسيق التاريخ ليظهر بشكل صحيح (يوم-شهر-سنة)
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   String _formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return "---";
     try {
@@ -40,7 +47,6 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
     }
   }
 
-  // حساب العمر بدقة
   String _calculateAge(String? birthDateStr) {
     if (birthDateStr == null) return "---";
     try {
@@ -98,14 +104,19 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0.5,
-          title: const Text("بيانات الطالب",
-              style: TextStyle(color: kTextDark, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
+          title: Text(widget.studentName,
+              style: const TextStyle(color: kTextDark, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
           centerTitle: true,
           bottom: TabBar(
             controller: _tabController,
             labelColor: kPrimaryBlue,
+            unselectedLabelColor: Colors.grey,
             indicatorColor: kPrimaryBlue,
-            tabs: const [Tab(text: "البيانات"), Tab(text: "الاختبارات"), Tab(text: "الحضور")],
+            tabs: const [
+              Tab(text: "البيانات"),
+              Tab(text: "الاختبارات"),
+              Tab(text: "الحضور"),
+            ],
           ),
         ),
         body: isLoadingInfo
@@ -114,8 +125,8 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
           controller: _tabController,
           children: [
             _buildInfoTab(),
-            const Center(child: Text("تبويب الاختبارات", style: TextStyle(fontFamily: 'Almarai'))),
-            const Center(child: Text("تبويب الحضور", style: TextStyle(fontFamily: 'Almarai'))),
+            StudentTestsTab(studentId: widget.studentId),
+            StudentAttendanceTab(studentId: widget.studentId),
           ],
         ),
       ),
