@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 
-// --- الـ Model ودالة التحويل مدمجين هنا عشان ميحصلش خطأ الملف المفقود ---
+// --- الـ Model ودالة التحويل مدمجين هنا ---
 
 AttendanceModel attendanceModelFromJson(String str) => AttendanceModel.fromJson(json.decode(str));
 
@@ -70,11 +70,9 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
   DateTime? _parseServerDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
     try {
-      // محاولة التحويل من صيغة ISO
       return DateTime.parse(dateStr);
     } catch (e) {
       try {
-        // محاولة التحويل من صيغة MM/dd/yyyy
         return DateFormat("MM/dd/yyyy").parse(dateStr);
       } catch (e2) {
         return null;
@@ -91,30 +89,20 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
 
       final url = 'https://nour-al-eman.runasp.net/api/Locations/GetAll-employee-attendance-ByEmpId?EmpId=$empId';
 
-      // --- طباعة في الكونسول للمتابعة ---
-      debugPrint("🚀 محاولة الاتصال بالرابط: $url");
-
       final response = await http.get(Uri.parse(url));
-
-      debugPrint("📬 كود الرد من السيرفر: ${response.statusCode}");
-      debugPrint("📄 نص البيانات الخام: ${response.body}");
 
       if (response.statusCode == 200) {
         final attendanceModel = attendanceModelFromJson(response.body);
         _processData(attendanceModel.data ?? []);
-      } else {
-        debugPrint("⚠️ فشل الطلب: ${response.statusCode}");
       }
     } catch (e) {
-      debugPrint("❌ خطأ غير متوقع: $e");
+      debugPrint("خطأ: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _processData(List<AttendanceData> rawData) {
-    debugPrint("⚙️ جاري معالجة ${rawData.length} سجل...");
-
     Map<String, List<AttendanceData>> groups = {};
     List<AttendanceData> validData = rawData.where((item) =>
     _parseServerDate(item.date) != null).toList();
@@ -134,8 +122,6 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
       _availableMonths = groups.keys.toList();
       _currentMonthIndex = 0;
     });
-
-    debugPrint(" تم ترتيب البيانات بنجاح. الشهور المتاحة: $_availableMonths");
   }
 
   @override
@@ -145,18 +131,18 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text("سجل حضور الموظف",
+          title: const Text("  ",
               style: TextStyle(fontWeight: FontWeight.bold,
                   fontFamily: 'Almarai',
                   fontSize: 16,
-                  color: Color(0xFF2E3542))),
+                 )),
           centerTitle: true,
           backgroundColor: Colors.white,
           elevation: 0.5,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
-          ),
+
+          // --- التعديل الجذري هنا لإخفاء السهم نهائياً ---
+          automaticallyImplyLeading: false, // يمنع Flutter من وضع سهم تلقائي
+          leading: null, // يلغي وجود أي عنصر في جهة اليمين/اليسار (حسب الاتجاه)
         ),
         body: _isLoading
             ? const Center(

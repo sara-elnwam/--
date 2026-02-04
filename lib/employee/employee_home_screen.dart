@@ -7,7 +7,6 @@ import 'employee_model.dart';
 import 'employee_attendance_screen.dart';
 import 'student_details/students_screen.dart';
 import 'employees_details/all_employees_screen.dart';
-// استيراد ملف السجل الجديد
 import 'employee_attendance_history_screen.dart';
 
 final Color primaryOrange = Color(0xFFC66422);
@@ -23,6 +22,7 @@ class EmployeeHomeScreen extends StatefulWidget {
 
 class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   String _currentTitle = "الصفحة الرئيسية";
+  int _currentIndex = 0; // تتبع الفهرس الحالي للشاشة المعروضة
   bool _isLoading = true;
   EmployeeData? employeeData;
   Map<String, dynamic>? _rawResponse;
@@ -65,9 +65,13 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     }
   }
 
-  void _onItemTapped(String title) {
-    setState(() => _currentTitle = title);
-    Navigator.pop(context);
+  // دالة لتغيير القسم المعروض عند الضغط على عنصر في السايدبار
+  void _onItemTapped(String title, int index) {
+    setState(() {
+      _currentIndex = index;
+      _currentTitle = title;
+    });
+    Navigator.pop(context); // إغلاق القائمة الجانبية بعد الاختيار
   }
 
   @override
@@ -85,44 +89,57 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           iconTheme: IconThemeData(color: darkBlue),
         ),
         drawer: _buildEmployeeSidebar(context),
+        // استخدام IndexedStack لتبديل المحتوى مع بقاء السايدبار متاحاً
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
-            : _buildBody(),
+            : IndexedStack(
+          index: _currentIndex,
+          children: [
+            EmployeeAttendanceScreen(),          // Index 0
+            _buildPersonalDataContent(),         // Index 1
+            EmployeeAttendanceHistoryScreen(),   // Index 2
+            StudentsScreen(),                    // Index 3
+            AllEmployeesScreen(),                // Index 4
+            _buildPlaceholder("المعلمون"),        // Index 5
+            _buildPlaceholder("المستويات"),       // Index 6
+            _buildPlaceholder("الفروع"),          // Index 7
+            _buildPlaceholder("الدورات"),         // Index 8
+            _buildPlaceholder("قائمة الإنتظار"),    // Index 9
+            _buildPlaceholder("إدارة الموظفين"),   // Index 10
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_currentTitle == "الصفحة الرئيسية" || _currentTitle == "تسجيل حضور") {
-      return EmployeeAttendanceScreen();
+  Widget _buildPersonalDataContent() {
+    String rawDate = employeeData?.joinDate?.toString() ?? "---";
+    String formattedDate = (rawDate != "---" && rawDate.length >= 10)
+        ? rawDate.substring(0, 10)
+        : rawDate;
+
+    String jobTitle = "---";
+    if (_rawResponse != null && _rawResponse!['employeeType'] != null) {
+      jobTitle = _rawResponse!['employeeType']['name'] ?? "---";
     }
 
-    if (_currentTitle == "البيانات الشخصية") {
-      String rawDate = employeeData?.joinDate?.toString() ?? "---";
-      String formattedDate = (rawDate != "---" && rawDate.length >= 10)
-          ? rawDate.substring(0, 10)
-          : rawDate;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildInfoCard("بيانات الموظف", Icons.person_pin_outlined, [
+          _infoRow("اسم الموظف :", employeeData?.name ?? "---"),
+          _infoRow("كود الموظف :", employeeData?.id?.toString() ?? "---"),
+          _infoRow("المكتب التابع له :", employeeData?.loc?.name ?? "---"),
+          _infoRow("موعد الالتحاق بالمدرسة :", formattedDate),
+          _infoRow("المؤهل الدراسي :", employeeData?.educationDegree ?? "---"),
+          _infoRow("المسمى الوظيفي :", jobTitle),
+        ]),
+      ],
+    );
+  }
 
-      String jobTitle = "---";
-      if (_rawResponse != null && _rawResponse!['employeeType'] != null) {
-        jobTitle = _rawResponse!['employeeType']['name'] ?? "---";
-      }
-
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildInfoCard("بيانات الموظف", Icons.person_pin_outlined, [
-            _infoRow("اسم الموظف :", employeeData?.name ?? "---"),
-            _infoRow("كود الموظف :", employeeData?.id?.toString() ?? "---"),
-            _infoRow("المكتب التابع له :", employeeData?.loc?.name ?? "---"),
-            _infoRow("موعد الالتحاق بالمدرسة :", formattedDate),
-            _infoRow("المؤهل الدراسي :", employeeData?.educationDegree ?? "---"),
-            _infoRow("المسمى الوظيفي :", jobTitle),
-          ]),
-        ],
-      );
-    }
-    return Center(child: Text("محتوى قسم: $_currentTitle",
+  Widget _buildPlaceholder(String title) {
+    return Center(child: Text("محتوى قسم: $title",
         style: const TextStyle(color: Colors.grey, fontFamily: 'Almarai')));
   }
 
@@ -194,17 +211,17 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  _buildSidebarItem(Icons.home_outlined, "الصفحة الرئيسية"),
-                  _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
-                  _buildSidebarItem(Icons.history, "سجل الحضور والإنصراف"),
-                  _buildSidebarItem(Icons.school_outlined, "الطلاب"),
-                  _buildSidebarItem(Icons.person_search_outlined, "المعلمون"),
-                  _buildSidebarItem(Icons.badge_outlined, "الموظفون"),
-                  _buildSidebarItem(Icons.layers_outlined, "المستويات و المجموعات"),
-                  _buildSidebarItem(Icons.location_on_outlined, "الفروع"),
-                  _buildSidebarItem(Icons.menu_book_outlined, "الدورات"),
-                  _buildSidebarItem(Icons.hourglass_empty, "قائمة الإنتظار"),
-                  _buildSidebarItem(Icons.manage_accounts_outlined, "إدارة الموظفين"),
+                  _buildSidebarItem(Icons.home_outlined, "الصفحة الرئيسية", 0),
+                  _buildSidebarItem(Icons.person_outline, "البيانات الشخصية", 1),
+                  _buildSidebarItem(Icons.history, "سجل الحضور والإنصراف", 2),
+                  _buildSidebarItem(Icons.school_outlined, "الطلاب", 3),
+                  _buildSidebarItem(Icons.badge_outlined, "الموظفون", 4),
+                  _buildSidebarItem(Icons.person_search_outlined, "المعلمون", 5),
+                  _buildSidebarItem(Icons.layers_outlined, "المستويات و المجموعات", 6),
+                  _buildSidebarItem(Icons.location_on_outlined, "الفروع", 7),
+                  _buildSidebarItem(Icons.menu_book_outlined, "الدورات", 8),
+                  _buildSidebarItem(Icons.hourglass_empty, "قائمة الإنتظار", 9),
+                  _buildSidebarItem(Icons.manage_accounts_outlined, "إدارة الموظفين", 10),
                 ],
               ),
             ),
@@ -212,7 +229,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           const Divider(height: 1),
           _buildSidebarItem(
               Icons.logout,
-              "تسجيل الخروج", // دي مهمة عشان الموظف يخرج من الحساب
+              "تسجيل الخروج",
+              -1,
               color: Colors.redAccent,
               isLogout: true
           ),
@@ -221,8 +239,9 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       ),
     );
   }
-  Widget _buildSidebarItem(IconData icon, String title, {Color? color, bool isLogout = false}) {
-    bool isSelected = _currentTitle == title;
+
+  Widget _buildSidebarItem(IconData icon, String title, int index, {Color? color, bool isLogout = false}) {
+    bool isSelected = _currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Container(
@@ -242,29 +261,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           onTap: () {
             if (isLogout) {
               _showLogoutDialog();
-            }
-            // اضفت لكِ هذا الشرط للانتقال لصفحة السجل
-            else if (title == "سجل الحضور والإنصراف") {
-              Navigator.pop(context); // 1. قفل السايدبار أولاً
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const EmployeeAttendanceHistoryScreen()),
-              );
-            }
-            else if (title == "الطلاب") {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => StudentsScreen()));
-            } else if (title == "الموظفون") {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => AllEmployeesScreen()));
             } else {
-              _onItemTapped(title);
+              _onItemTapped(title, index); // استخدام التبديل الداخلي بدلاً من Navigator.push
             }
           },
         ),
       ),
     );
   }
+
   void _showLogoutDialog() {
     showDialog(
       context: context,
