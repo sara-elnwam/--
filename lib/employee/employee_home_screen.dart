@@ -4,9 +4,10 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'employee_model.dart';
+import 'employee_attendance_screen.dart'; // الملف الجديد اللي عملناه
 import 'student_details/students_screen.dart';
-import 'employees_details/all_employees_screen.dart'; // تأكدي من أن اسم الملف صحيح هنا
-
+import 'employees_details/all_employees_screen.dart';
+import 'employee_attendance_screen.dart';
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -90,6 +91,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   }
 
   Widget _buildBody() {
+    // إذا كانت الصفحة الرئيسية، نعرض واجهة الحضور والإنصراف مباشرة
+    if (_currentTitle == "الصفحة الرئيسية" || _currentTitle == "الحضور و الإنصراف") {
+      return EmployeeAttendanceScreen();
+    }
+
     if (_currentTitle == "البيانات الشخصية") {
       String rawDate = employeeData?.joinDate?.toString() ?? "---";
       String formattedDate = (rawDate != "---" && rawDate.length >= 10)
@@ -238,16 +244,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               _showLogoutDialog();
             } else if (title == "الطلاب") {
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => StudentsScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => StudentsScreen()));
             } else if (title == "الموظفون") {
-              Navigator.pop(context); // قفل الدرور
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AllEmployeesScreen()),
-              );
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => AllEmployeesScreen()));
             } else {
               _onItemTapped(title);
             }
