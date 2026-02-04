@@ -25,7 +25,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     _fetchAttendanceLogs();
   }
 
-  // دالة معالجة التاريخ لضمان عدم حدوث FormatException
   DateTime? _parseServerDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
     try {
@@ -62,7 +61,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   void _processData(List<AttendanceData> rawData) {
     Map<String, List<AttendanceData>> groups = {};
 
-    // تصفية البيانات وترتيبها
     List<AttendanceData> validData = rawData.where((item) => _parseServerDate(item.date) != null).toList();
     validData.sort((a, b) => _parseServerDate(b.date)!.compareTo(_parseServerDate(a.date)!));
 
@@ -112,45 +110,45 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
-  // شريط التنقل بين الشهور (تنسيق مطابق للصورة تماماً)
   Widget _buildMonthNavigator() {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min, // ليأخذ عرض المحتوى فقط كما في الصورة
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // السهم اللي على اليمين يبص "شمال" عشان يروح للأحدث (index أقل)
           IconButton(
-            icon: const Icon(Icons.arrow_right, size: 28, color: Colors.black87),
-            onPressed: _currentMonthIndex < _availableMonths.length - 1
-                ? () => setState(() => _currentMonthIndex++) : null,
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black87),
+            onPressed: _currentMonthIndex > 0
+                ? () => setState(() => _currentMonthIndex--) : null,
           ),
           const SizedBox(width: 15),
           Text(
             _availableMonths[_currentMonthIndex],
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, fontFamily: 'Almarai'),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, fontFamily: 'Almarai'),
           ),
           const SizedBox(width: 15),
+          // السهم اللي على الشمال يبص "يمين" عشان يرجع للأقدم (index أكبر)
           IconButton(
-            icon: const Icon(Icons.arrow_left, size: 28, color: Colors.black87),
-            onPressed: _currentMonthIndex > 0
-                ? () => setState(() => _currentMonthIndex--) : null,
+            icon: const Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black87),
+            onPressed: _currentMonthIndex < _availableMonths.length - 1
+                ? () => setState(() => _currentMonthIndex++) : null,
           ),
         ],
       ),
     );
   }
 
-  // هيدر الجدول بمسافات متساوية تماماً
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 15),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       margin: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
@@ -166,7 +164,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
-  // دالة مساعدة لضمان توزيع العناصر بشكل متساوي 100%
   Widget _headerItem(String label) {
     return Expanded(
       child: Text(
@@ -175,7 +172,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.grey,
-            fontSize: 14,
+            fontSize: 12,
             fontFamily: 'Almarai'
         ),
       ),
@@ -193,52 +190,48 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         DateTime? date = _parseServerDate(log.date);
 
         return Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          padding: const EdgeInsets.symmetric(vertical: 15),
           margin: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
           ),
           child: Row(
             children: [
-              // قسم اليوم والتاريخ
               Expanded(
                 child: Column(
                   children: [
                     Text(
                       date != null ? DateFormat('EEEE', 'ar').format(date) : "",
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       date != null ? DateFormat('yyyy/MM/dd').format(date) : "",
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
                     ),
                   ],
                 ),
               ),
-              // وقت الحضور
               Expanded(
                 child: Text(
                   log.checkInTime ?? "--",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
-              // وقت الانصراف
               Expanded(
                 child: Text(
                   log.checkOutTime ?? "--",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
-              // ساعات العمل
               Expanded(
                 child: Text(
                   log.workingHours ?? "--",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                 ),
               ),
             ],

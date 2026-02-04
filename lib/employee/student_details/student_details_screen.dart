@@ -81,6 +81,7 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
       );
       if (response.statusCode == 200) {
         setState(() {
+          print("DEBUG STUDENT DATA: ${response.body}");
           studentData = jsonDecode(response.body)['data'];
           isLoadingInfo = false;
         });
@@ -111,7 +112,7 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.edit_note, color: kPrimaryBlue, size: 24),
+              icon: const Icon(Icons.edit_note, color: Color(0xFF1976D2), size: 24),
               onPressed: () {
                 // التعديل هنا: تمرير studentData بالكامل
                 Navigator.push(

@@ -257,7 +257,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                   )).toList(),
                   onChanged: (val) {
                     setState(() {
-                      _selectedJobTypeId = val;
+                      _selectedJobTypeId = val; // نخزن الـ ID المختار
                     });
                   },
                 ),

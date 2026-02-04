@@ -44,21 +44,26 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
     super.initState();
     final data = widget.initialData;
 
-    nameController = TextEditingController(text: data?['name']?.toString() ?? '');
-    parentJobController = TextEditingController(text: data?['parentJob']?.toString() ?? '');
-    addressController = TextEditingController(text: data?['address']?.toString() ?? '');
-    phoneController = TextEditingController(text: data?['phone']?.toString() ?? '');
-    phone2Controller = TextEditingController(text: data?['phone2']?.toString() ?? '');
-    schoolController = TextEditingController(text: data?['governmentSchool']?.toString() ?? '');
+    nameController = TextEditingController(text: data?['name']?.toString() ?? "");
+    parentJobController = TextEditingController(text: data?['parentJob']?.toString() ?? "");
+    addressController = TextEditingController(text: data?['address']?.toString() ?? "");
+    phoneController = TextEditingController(text: data?['phone']?.toString() ?? "");
+    phone2Controller = TextEditingController(text: data?['phone2']?.toString() ?? "");
+    schoolController = TextEditingController(text: data?['governmentSchool']?.toString() ?? "");
 
-    if (data?['birthDate'] != null) birthDate = DateTime.tryParse(data!['birthDate']);
-    if (data?['joinDate'] != null) joinDate = DateTime.tryParse(data!['joinDate']);
 
-    selectedLocId = data?['locId'];
-    attendanceType = data?['attendanceType'];
-    paymentType = data?['paymentType'];
-    documentType = data?['documentType'];
-    typeInfamily = data?['typeInfamily'];
+    selectedLocId = widget.initialData?['locId'];
+    attendanceType = widget.initialData?['attendanceType'];
+    paymentType = widget.initialData?['paymentType'];
+    documentType = widget.initialData?['documentType'];
+    typeInfamily = widget.initialData?['typeInfamily'];
+    // تحويل النصوص لتواريخ عشان الـ UI
+    if (widget.initialData?['birthDate'] != null) {
+      birthDate = DateTime.parse(widget.initialData!['birthDate']);
+    }
+    if (widget.initialData?['joinDate'] != null) {
+      joinDate = DateTime.parse(widget.initialData!['joinDate']);
+    }
   }
 
   InputDecoration _buildInputDecoration(String hint) {
@@ -213,34 +218,45 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
 
   Future<void> _updateStudentData() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('token');
 
-      // الرابط الصحيح بناءً على تجربة المتصفح
       final String fullUrl = '$baseUrl/Student/Update';
-      print("Requesting: $fullUrl");
 
+      // تجهيز الداتا بناءً على الـ JSON الفعلي اللي ظهر في الـ Debug عندك
       final Map<String, dynamic> body = {
         "id": widget.studentId,
-        "name": nameController.text,
-        "phone": phoneController.text,
-        "phone2": phone2Controller.text,
-        "address": addressController.text,
-        "parentJob": parentJobController.text,
-        "governmentSchool": schoolController.text,
+        "name": nameController.text.trim(),
+        "phone": phoneController.text.trim(),
+        "phone2": phone2Controller.text.trim(),
+        "address": addressController.text.trim(),
+        "parentJob": parentJobController.text.trim(),
+        "governmentSchool": schoolController.text.trim(),
         "attendanceType": attendanceType,
-        "birthDate": birthDate?.toIso8601String(),
-        "joinDate": joinDate?.toIso8601String(),
-        "locId": selectedLocId,
-        "paymentType": paymentType,
-        "documentType": documentType,
-        "typeInfamily": typeInfamily,
-        "levelId": widget.initialData?['levelId'],
-        "groupId": widget.initialData?['groupId'],
+
+        // تنسيق التاريخ ليكون YYYY-MM-DD عشان السيرفر يقبله صح
+        "birthDate": birthDate?.toIso8601String().split('T')[0],
+        "joinDate": joinDate?.toIso8601String().split('T')[0],
+
+        // إرسال الـ IDs اللي الليدر قال إنها مبتتبعتش
+        "locId": selectedLocId ?? widget.initialData?['locId'],
+        "levelId": widget.initialData?['levelId'], // دي القيمة 2 اللي في الـ JSON بتاعك
+        "groupId": widget.initialData?['groupId'], // دي القيمة 2 اللي في الـ JSON بتاعك
+
+        "paymentType": paymentType ?? "لم يتم التحديد بعد",
+        "documentType": documentType ?? "لم يتم التحديد بعد",
+        "typeInfamily": typeInfamily ?? "لم يتم التحديد بعد",
       };
+
+// السطر ده مهم جداً عشان تراجع الداتا في الـ Console قبل ما تتبعت
+      print("Final Body to Server: ${jsonEncode(body)}");
+
+      // اطبع الـ Body عشان تتأكد إنه مش null
+      debugPrint("🚀 Final Body to Server: ${jsonEncode(body)}");
 
       final response = await http.put(
         Uri.parse(fullUrl),
@@ -251,22 +267,19 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
         body: jsonEncode(body),
       );
 
-      print("Status Code: ${response.statusCode}");
-
       if (response.statusCode == 200 || response.statusCode == 204) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("تم تحديث بيانات الطالب بنجاح"), backgroundColor: Colors.green)
+            const SnackBar(content: Text("✅ تم تحديث بيانات الطالب بنجاح"), backgroundColor: Colors.green)
         );
         Navigator.pop(context, true);
       } else {
-        // طباعة تفاصيل الخطأ من السيرفر لمعرفة إذا كان هناك حقل ناقص
-        print("Error Response: ${response.body}");
-        throw Exception("فشل التحديث: ${response.statusCode}");
+        debugPrint("❌ Server Response Error: ${response.body}");
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("فشل التحديث: ${response.statusCode}"), backgroundColor: Colors.red)
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("خطأ في الاتصال: $e"), backgroundColor: Colors.red)
-      );
+      debugPrint("⚠️ Exception: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

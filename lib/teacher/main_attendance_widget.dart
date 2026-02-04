@@ -79,31 +79,27 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
 
   Future<void> _fetchOffices() async {
     try {
-      // جلب البيانات الحقيقية من الباك إند
       final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Locations/GetAllLocations'));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
-          // هنا بنقول له: خد البيانات من الباك إند لو موجودة، لو لسبب ما راجعة فاضية استخدم الـ Backup
           List<dynamic> serverData = data['data'] ?? [];
           if (serverData.isNotEmpty) {
-            _apiOffices = serverData; // دي النقط الحقيقية اللي هتتحدث لوحدها
+            _apiOffices = serverData;
           } else {
             _apiOffices = _getBackupOffices();
           }
         });
       } else {
-        // لو السيرفر ماردش بـ 200 (OK)
         setState(() => _apiOffices = _getBackupOffices());
       }
     } catch (e) {
-      // لو مفيش إنترنت أو حصل خطأ في الاتصال
       print("Network Error: $e");
       setState(() => _apiOffices = _getBackupOffices());
     }
   }
-// دالة مساعدة بترجع المكاتب اللي في الصورة عشان القائمة تفتح دايماً
+
   List<Map<String, dynamic>> _getBackupOffices() {
     return [
       {"id": 2, "name": "مدرسة نور الإيمان", "coordinates": "31.178793, 31.223888"},
@@ -136,7 +132,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
                 _checkType = "Out";
                 _attendanceDone = true;
                 _selectedLocationName = lastLog['locationName'];
-                _isInRange = true; // نفترض التواجد في النطاق عند الانصراف
+                _isInRange = true;
               });
             }
           }
@@ -216,7 +212,7 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     if (!_isInRange) {
       _showSnackBar("أنت خارج النطاق الجغرافي لـ ${_selectedLocationName}", Colors.red);
     } else {
-      _showSnackBar("أنت الآن داخل نطاق ${_selectedLocationName} ✅", Colors.green);
+      _showSnackBar("أنت الآن داخل نطاق ${_selectedLocationName} ", Colors.green);
     }
   }
 
@@ -269,10 +265,10 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         setState(() {
           if (_checkType == "In") {
             _attendanceDone = true;
-            _checkType = "Out";
+            _checkType = "Out"; // قلب الحالة بعد النجاح
           } else {
             _attendanceDone = false;
-            _checkType = "In";
+            _checkType = "In"; // قلب الحالة بعد النجاح
             _selectedOffice = null;
             _isInRange = false;
           }
@@ -340,14 +336,6 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
               const SizedBox(height: 50),
               _buildFingerprintButton(),
               const SizedBox(height: 20),
-              Text(
-                _checkType == "In" ? "اضغط لتسجيل الحضور" : "اضغط لتسجيل الانصراف",
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _isInRange ? (_checkType == "In" ? const Color(0xFF1A237E) : Colors.orange.shade800) : Colors.grey
-                ),
-              ),
               if (_isLoading) const Padding(padding: EdgeInsets.only(top: 15), child: CircularProgressIndicator())
             ],
           ),
@@ -400,38 +388,53 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   }
 
   Widget _buildFingerprintButton() {
-    // الزر لا يتفاعل إلا إذا تم اختيار مكتب وكان المستخدم داخل النطاق
     bool canPress = _selectedOffice != null && _isInRange;
+    // تخصيص الألوان والنصوص بناءً على الحالة
+    String statusText = _checkType == "In" ? "اضغط لتسجيل الحضور" : "اضغط لتسجيل الانصراف";
     Color activeColor = _checkType == "In" ? const Color(0xFF1A237E) : Colors.orange.shade800;
 
-    return GestureDetector(
-      onTap: canPress ? _startBiometricAuth : () {
-        if (_selectedOffice == null) {
-          _showSnackBar("برجاء اختيار المكتب أولاً", Colors.orange);
-        } else if (!_isInRange) {
-          _showSnackBar("أنت خارج النطاق، لا يمكنك البصم", Colors.red);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.all(35),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
-          border: Border.all(
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: canPress ? _startBiometricAuth : () {
+            if (_selectedOffice == null) {
+              _showSnackBar("برجاء اختيار المكتب أولاً", Colors.orange);
+            } else if (!_isInRange) {
+              _showSnackBar("أنت خارج النطاق، لا يمكنك البصم", Colors.red);
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            padding: const EdgeInsets.all(35),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              border: Border.all(
+                  color: canPress ? activeColor : Colors.grey.shade300,
+                  width: 5
+              ),
+              boxShadow: [
+                if (canPress) BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 20)
+              ],
+            ),
+            child: Icon(
+              _checkType == "In" ? Icons.fingerprint : Icons.exit_to_app,
+              size: 80,
               color: canPress ? activeColor : Colors.grey.shade300,
-              width: 5
+            ),
           ),
-          boxShadow: [
-            if (canPress) BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 20)
-          ],
         ),
-        child: Icon(
-          _checkType == "In" ? Icons.fingerprint : Icons.exit_to_app,
-          size: 80,
-          color: canPress ? activeColor : Colors.grey.shade300,
+        const SizedBox(height: 20),
+        Text(
+          statusText,
+          style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: canPress ? activeColor : Colors.grey,
+              fontFamily: 'Almarai'
+          ),
         ),
-      ),
+      ],
     );
   }
 }
