@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
 @pragma('vm:entry-point')
 void downloadCallback(String id, int status, int progress) {
@@ -42,36 +43,72 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
   }
 
   Future<void> _downloadFile(dynamic course) async {
+    // 1. طلب الأذونات (دعم أندرويد 13 فما فوق يحتاج Permission.notification)
     await [Permission.storage, Permission.notification].request();
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? token = prefs.getString('token');
+      final String? token = prefs.getString('user_token');
 
-      final String levelId = course['levelId']?.toString() ?? "1";
-      final String typeId = course['typeId']?.toString() ?? "3";
-      final String finalUrl = "https://nour-al-eman.runasp.net/api/StudentCources/DownloadLatest?levelId=$levelId&typeId=$typeId";
+      if (token == null || token == "no_token") {
+        _showSnackBar("يجب تسجيل الدخول أولاً");
+        return;
+      }
 
-      String savePath = "/storage/emulated/0/Download";
-      String fileName = "${course['name'] ?? 'file'}_${DateTime.now().millisecondsSinceEpoch}.pdf";
+      // 2. سحب البيانات والـ IDs
+      final String levelId = course['levelId']?.toString() ?? "";
+      final String typeId = course['typeId']?.toString() ?? "";
+      final String courseId = course['id']?.toString() ?? "";
 
+      // 3. بناء الرابط مع Timestamp لمنع الـ Caching
+      // إضافة DateTime.now يجعل السيرفر يعامل كل ضغطة تحميل كأنها طلب جديد تماماً
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final String finalUrl = "https://nour-al-eman.runasp.net/api/StudentCources/DownloadLatest"
+          "?levelId=$levelId&typeId=$typeId&courseId=$courseId&v=$timestamp";
+
+      // 4. تحديد مسار الحفظ بشكل آمن
+      String? savedPath;
+      if (Platform.isAndroid) {
+        // محاولة الوصول لمجلد الـ Downloads العام
+        final directory = Directory('/storage/emulated/0/Download');
+        if (await directory.exists()) {
+          savedPath = directory.path;
+        } else {
+          // حل احتياطي إذا لم يتوفر المسار أعلاه
+          final externalDir = await getExternalStorageDirectory();
+          savedPath = externalDir?.path;
+        }
+      } else {
+        final downloadDir = await getApplicationDocumentsDirectory();
+        savedPath = downloadDir.path;
+      }
+
+      if (savedPath == null) {
+        _showSnackBar("تعذر العثور على مسار لحفظ الملف");
+        return;
+      }
+
+      // 5. اسم الملف فريد
+      String fileName = "${course['name'] ?? 'file'}_$courseId.pdf";
+
+      // بدء التحميل
       await FlutterDownloader.enqueue(
         url: finalUrl,
-        savedDir: savePath,
+        savedDir: savedPath,
         fileName: fileName,
         headers: {
           "Authorization": "Bearer $token",
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "*/*",
+          "Accept": "application/pdf",
         },
         showNotification: true,
         openFileFromNotification: true,
         saveInPublicStorage: true,
       );
 
-      _showSnackBar(" بدأ التحميل.. ", isError: false);
+      _showSnackBar("بدأ تحميل ${course['name']}...", isError: false);
     } catch (e) {
-      _showSnackBar(" فشل في بدء التحميل");
+      _showSnackBar("فشل في بدء التحميل");
+      debugPrint("Download Error: $e");
     }
   }
 
@@ -93,7 +130,7 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
     }
 
     if (widget.coursesList.isEmpty) {
-      return const Center(child: Text("لا توجد ملفات متاحة حالياً"));
+      return const Center(child: Text("لا توجد ملفات متاحة حالياً", style: TextStyle(fontFamily: 'Almarai')));
     }
 
     return ListView.builder(
@@ -110,22 +147,15 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
             ],
           ),
           child: Row(
-            // الـ Row في فلاتر بيعكس ترتيب العناصر تلقائياً بناءً على اتجاه اللغة
-            // يعني أول عنصر في الكود هيكون في اليمين لو عربي، وفي الشمال لو إنجليزي
             children: [
-              // 1. قسم النصوص (الإسم والتفاصيل) - هو الأول عشان يظهر في جهة "بداية" اللغة
               Expanded(
                 flex: 5,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, // بيبدأ من اليمين في العربي والشمال في الإنجليزي
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildInfoRow("الإسم", course['name'] ?? "غير متوفر"),
                     const SizedBox(height: 8),
@@ -133,10 +163,7 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
                   ],
                 ),
               ),
-
-              const Spacer(), // بيخلق فراغ في النص عشان يزق زرار التحميل للطرف التاني
-
-              // 2. قسم زر التحميل - هيظهر في جهة "نهاية" اللغة (شمال في العربي، يمين في الإنجليزي)
+              const Spacer(),
               InkWell(
                 onTap: () => _downloadFile(course),
                 child: Container(
@@ -144,7 +171,6 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ترتيب الأيقونة والكلمة جوه الزرار كمان هيتعكس لوحده
                       const Icon(Icons.download_outlined, color: Color(0xFFC66422), size: 24),
                       const SizedBox(width: 4),
                       const Text(
@@ -171,24 +197,8 @@ class _StudentCoursesWidgetState extends State<StudentCoursesWidget> {
       alignment: WrapAlignment.start,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(
-          "$label: ",
-          style: const TextStyle(
-            color: Colors.grey,
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-            fontFamily: 'Almarai',
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Color(0xFF2E3542),
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            fontFamily: 'Almarai',
-          ),
-        ),
+        Text("$label: ", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500, fontSize: 14, fontFamily: 'Almarai')),
+        Text(value, style: const TextStyle(color: Color(0xFF2E3542), fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Almarai')),
       ],
     );
   }

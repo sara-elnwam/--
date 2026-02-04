@@ -21,10 +21,9 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
     _fetchDetails();
   }
 
-  // دالة بسيطة لعرض التاريخ القادم من السيرفر بدون تدخل
   String _formatServerDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return "---";
-    return dateStr.split('T')[0]; // عرض الجزء الخاص بالتاريخ فقط من السلسلة
+    return dateStr.split('T')[0];
   }
 
   Future<void> _fetchDetails() async {
@@ -64,12 +63,11 @@ class _EmployeeDetailsScreenState extends State<EmployeeDetailsScreen> {
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, // يبدأ من اليمين (للعربي)
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildInfoItem("اسم الموظف", _empData?['name'] ?? widget.empName),
             _buildInfoItem("كود الموظف", _empData?['id']?.toString() ?? "---"),
             _buildInfoItem("المكتب التابع له", _empData?['loc']?['name'] ?? "---"),
-            // هنا التاريخ بيرجع زي ما هو من السيرفر
             _buildInfoItem("موعد الالتحاق", _formatServerDate(_empData?['joinDate'])),
             _buildInfoItem("المؤهل الدراسي", _empData?['educationDegree'] ?? "---"),
             _buildInfoItem("المسمى الوظيفي", _empData?['employeeType']?['name'] ?? "---"),

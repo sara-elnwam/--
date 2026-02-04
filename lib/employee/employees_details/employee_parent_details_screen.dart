@@ -13,7 +13,6 @@ class EmployeeParentDetailsScreen extends StatefulWidget {
 }
 
 class _EmployeeParentDetailsScreenState extends State<EmployeeParentDetailsScreen> {
-  // مفتاح فريد لإجبار الشاشة الداخلية على إعادة التحميل بالكامل إذا لزم الأمر
   Key _detailsKey = UniqueKey();
 
   @override
@@ -42,19 +41,14 @@ class _EmployeeParentDetailsScreenState extends State<EmployeeParentDetailsScree
               IconButton(
                 icon: const Icon(Icons.edit_note, color: Color(0xFF1976D2), size: 28),
                 onPressed: () async {
-                  // 1. الانتقال لشاشة التعديل وانتظار نتيجة (result)
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => EditEmployeeScreen(empId: widget.empId),
                     ),
                   );
-
-                  // 2. إذا رجع المستخدم وكان التعديل ناجحاً (result == true)
                   if (result == true) {
                     setState(() {
-                      // تحديث الـ Key يضمن أن Flutter سيمسح النسخة القديمة
-                      // من الشاشة ويستدعي الـ API من جديد في initState
                       _detailsKey = UniqueKey();
                     });
                   }
@@ -75,7 +69,6 @@ class _EmployeeParentDetailsScreenState extends State<EmployeeParentDetailsScree
           ),
           body: TabBarView(
             children: [
-              // نمرر الـ Key هنا لضمان التحديث
               EmployeeDetailsScreen(
                 key: _detailsKey,
                 empId: widget.empId,

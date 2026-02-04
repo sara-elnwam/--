@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import 'package:http_parser/http_parser.dart'; // تأكد من وجود هذا الاستيراد في الأعلى
+import 'package:http_parser/http_parser.dart';
 
 class EditEmployeeScreen extends StatefulWidget {
   final int empId;
@@ -26,7 +26,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
   PlatformFile? _pickedFile;
 
-  // خريطة المواقع
+  //  المواقع
   final Map<String, int> _locationsMap = {
     "مدرسة نور الإيمان": 2,
     "rouby's location": 3,
@@ -36,7 +36,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     "مضيفة نافع": 7,
     "مكتب الموقف": 8,
   };
-// أضف هذه الخريطة تحت خريطة المواقع _locationsMap
+
   final Map<String, int> _jobTitlesMap = {
     "معلم/ معلمه": 1,
     "إدارة": 2,
@@ -89,11 +89,9 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
           _phoneController.text = data['phone']?.toString() ?? '';
           _nationalIdController.text = (data['ssn'] ?? '').toString();
 
-          // 1. تنظيف حقل المؤهل الدراسي من كلمة "string" التلقائية
           String education = data['educationDegree']?.toString() ?? '';
           _educationController.text = (education.toLowerCase() == "string") ? "" : education;
 
-          // 2. معالجة التاريخ بشكل آمن (تجنب 0001-01-01)
           if (data['joinDate'] != null && data['joinDate'].toString().startsWith('20')) {
             _joinDateController.text = data['joinDate'].split('T')[0];
           } else {
@@ -102,7 +100,6 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
 
           _selectedLocationId = data['locId'];
 
-          // 3. تحديث المسمى الوظيفي (الـ ID الرقمي)
           if (data['employeeTypeId'] != null) {
             _selectedJobTypeId = int.tryParse(data['employeeTypeId'].toString());
           } else if (data['employeeType'] != null) {
@@ -132,10 +129,8 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. فحص منطقي للتاريخ لتجنب خطأ 0001-01-01
       String finalJoinDate;
       if (_joinDateController.text.isEmpty || _joinDateController.text.startsWith('0001')) {
-        // إذا كان التاريخ فارغاً أو غير صالح، نستخدم تاريخ اللحظة الحالية بتنسيق ISO
         finalJoinDate = DateTime.now().toIso8601String().split('.')[0];
       } else {
         // إضافة الوقت للتاريخ المختار ليقبله السيرفر
@@ -148,42 +143,40 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
         "ssn": _nationalIdController.text.trim(), //
         "phone": _phoneController.text.trim(), //
         "educationDegree": _educationController.text.trim(), //
-        "joinDate": finalJoinDate, // القيمة المفحوصة لضمان نجاح الحفظ
-        "locId": _selectedLocationId, //
+        "joinDate": finalJoinDate,
+        "locId": _selectedLocationId,
 
-        // 2. إرسال النوع كـ String (1 للمعلم، 2 للإدارة، 3 للمحاسب)
         "employeeTypeId": (_selectedJobTypeId ?? 2).toString(), //
 
-        "groups": [], //
-        "courses": [] //
+        "groups": [],
+        "courses": []
       };
 
       final response = await http.put(
         Uri.parse('https://nour-al-eman.runasp.net/api/Employee/Update'), //
         headers: {
-          'Content-Type': 'application/json', //
-          'Accept': 'application/json', //
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: jsonEncode(payload), //
+        body: jsonEncode(payload),
       );
 
-      final responseData = jsonDecode(response.body); //
+      final responseData = jsonDecode(response.body);
 
       if (responseData['data'] != null && responseData['error'] == null) {
-        _showSnackBar("تم التعديل بنجاح ✅", isError: false); //
+        _showSnackBar("تم التعديل بنجاح ", isError: false);
         Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) Navigator.pop(context, true); //
+          if (mounted) Navigator.pop(context, true);
         });
       } else {
-        // إظهار الخطأ القادم من السيرفر (مثل Entity Framework errors)
         String errorMessage = responseData['error'] ?? "خطأ غير معروف في حفظ البيانات";
         _showSnackBar(errorMessage); //
       }
 
     } catch (e) {
-      _showSnackBar("حدث خطأ في الاتصال: $e"); //
+      _showSnackBar("حدث خطأ في الاتصال: $e");
     } finally {
-      if (mounted) setState(() => _isSaving = false); //
+      if (mounted) setState(() => _isSaving = false);
     }
   }
   void _showSnackBar(String message, {bool isError = true}) {
@@ -264,7 +257,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                   )).toList(),
                   onChanged: (val) {
                     setState(() {
-                      _selectedJobTypeId = val; // نخزن الـ ID المختار
+                      _selectedJobTypeId = val;
                     });
                   },
                 ),

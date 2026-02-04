@@ -25,7 +25,7 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     _fetchAllEmployees();
   }
 
-  // جلب قائمة الموظفين
+
   Future<void> _fetchAllEmployees() async {
     setState(() => _isLoading = true);
     try {
@@ -45,13 +45,11 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     }
   }
 
-  // وظيفة تحديث كلمة السر للموظف
   Future<void> _updatePassword(int empId, String newPassword) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      // ملاحظة: تأكدي من الـ Endpoint إذا كان خاص بالموظف أو عام للحسابات
       final url = Uri.parse('https://nour-al-eman.runasp.net/api/Student/ResetPassword');
 
       final response = await http.post(
@@ -76,7 +74,6 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     }
   }
 
-  // وظيفة الحذف
   Future<void> _deleteEmployee(int id) async {
     try {
       final response = await http.post(
@@ -91,7 +88,6 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     }
   }
 
-  // بوب أب تغيير كلمة السر بنفس تصميمك
   void _showResetPasswordDialog(int empId, String empName) {
     final TextEditingController _passController = TextEditingController();
     final TextEditingController _confirmPassController = TextEditingController();
@@ -156,7 +152,6 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     );
   }
 
-  // بوب أب الحذف
   void _showDeleteConfirmDialog(int empId) {
     showDialog(
       context: context,
@@ -238,7 +233,6 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
           _cellText(index.toString(), 1),
           _cellText(emp['name'] ?? "---", 4, isBold: true),
           _cellText(emp['employeeType']?['name'] ?? "---", 2),
-          // داخل ملف all_employees_screen.dart
           _cellIcon(Icons.person, Colors.blue[900]!, 2, () async {
             await Navigator.push(
               context,
@@ -249,7 +243,7 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
                 ),
               ),
             );
-            _fetchAllEmployees(); // تحديث القائمة الرئيسية بعد العودة من التفاصيل
+            _fetchAllEmployees();
           }),
           _cellIcon(Icons.lock, Colors.blue, 2, () => _showResetPasswordDialog(emp['id'], emp['name'])),
           _cellIcon(Icons.delete, Colors.redAccent, 1, () => _showDeleteConfirmDialog(emp['id'])),

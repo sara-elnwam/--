@@ -1,0 +1,264 @@
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import 'dart:ui' as ui;
+import 'attendance_model.dart';
+
+class AttendanceHistoryScreen extends StatefulWidget {
+  const AttendanceHistoryScreen({super.key});
+
+  @override
+  State<AttendanceHistoryScreen> createState() => _AttendanceHistoryScreenState();
+}
+
+class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
+  bool _isLoading = true;
+  Map<String, List<AttendanceData>> _groupedAttendance = {};
+  List<String> _availableMonths = [];
+  int _currentMonthIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAttendanceLogs();
+  }
+
+  // دالة معالجة التاريخ لضمان عدم حدوث FormatException
+  DateTime? _parseServerDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return null;
+    try {
+      return DateTime.parse(dateStr);
+    } catch (e) {
+      try {
+        return DateFormat("MM/dd/yyyy").parse(dateStr);
+      } catch (e2) {
+        return null;
+      }
+    }
+  }
+
+  Future<void> _fetchAttendanceLogs() async {
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String empId = prefs.getString('user_id') ?? "";
+
+      final response = await http.get(Uri.parse(
+          'https://nour-al-eman.runasp.net/api/Locations/GetAll-employee-attendance-ByEmpId?EmpId=$empId'));
+
+      if (response.statusCode == 200) {
+        final attendanceModel = attendanceModelFromJson(response.body);
+        _processData(attendanceModel.data ?? []);
+      }
+    } catch (e) {
+      debugPrint("Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _processData(List<AttendanceData> rawData) {
+    Map<String, List<AttendanceData>> groups = {};
+
+    // تصفية البيانات وترتيبها
+    List<AttendanceData> validData = rawData.where((item) => _parseServerDate(item.date) != null).toList();
+    validData.sort((a, b) => _parseServerDate(b.date)!.compareTo(_parseServerDate(a.date)!));
+
+    for (var entry in validData) {
+      DateTime date = _parseServerDate(entry.date)!;
+      String monthYear = DateFormat('MMMM yyyy', 'ar').format(date);
+      if (!groups.containsKey(monthYear)) groups[monthYear] = [];
+      groups[monthYear]!.add(entry);
+    }
+
+    setState(() {
+      _groupedAttendance = groups;
+      _availableMonths = groups.keys.toList();
+      _currentMonthIndex = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: ui.TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: const Text("حضور و انصراف المعلم",
+              style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Almarai', fontSize: 16)),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _availableMonths.isEmpty
+            ? _buildEmptyState()
+            : Column(
+          children: [
+            _buildMonthNavigator(),
+            _buildTableHeader(),
+            Expanded(child: _buildAttendanceList()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // شريط التنقل بين الشهور (تنسيق مطابق للصورة تماماً)
+  Widget _buildMonthNavigator() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min, // ليأخذ عرض المحتوى فقط كما في الصورة
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_right, size: 28, color: Colors.black87),
+            onPressed: _currentMonthIndex < _availableMonths.length - 1
+                ? () => setState(() => _currentMonthIndex++) : null,
+          ),
+          const SizedBox(width: 15),
+          Text(
+            _availableMonths[_currentMonthIndex],
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, fontFamily: 'Almarai'),
+          ),
+          const SizedBox(width: 15),
+          IconButton(
+            icon: const Icon(Icons.arrow_left, size: 28, color: Colors.black87),
+            onPressed: _currentMonthIndex > 0
+                ? () => setState(() => _currentMonthIndex--) : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // هيدر الجدول بمسافات متساوية تماماً
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          _headerItem("اليوم"),
+          _headerItem("حضور"),
+          _headerItem("إنصراف"),
+          _headerItem("ساعات العمل"),
+        ],
+      ),
+    );
+  }
+
+  // دالة مساعدة لضمان توزيع العناصر بشكل متساوي 100%
+  Widget _headerItem(String label) {
+    return Expanded(
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+            fontSize: 14,
+            fontFamily: 'Almarai'
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceList() {
+    String currentMonth = _availableMonths[_currentMonthIndex];
+    List<AttendanceData> logs = _groupedAttendance[currentMonth]!;
+
+    return ListView.builder(
+      itemCount: logs.length,
+      itemBuilder: (context, index) {
+        final log = logs[index];
+        DateTime? date = _parseServerDate(log.date);
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+          ),
+          child: Row(
+            children: [
+              // قسم اليوم والتاريخ
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      date != null ? DateFormat('EEEE', 'ar').format(date) : "",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      date != null ? DateFormat('yyyy/MM/dd').format(date) : "",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              // وقت الحضور
+              Expanded(
+                child: Text(
+                  log.checkInTime ?? "--",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              // وقت الانصراف
+              Expanded(
+                child: Text(
+                  log.checkOutTime ?? "--",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              // ساعات العمل
+              Expanded(
+                child: Text(
+                  log.workingHours ?? "--",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_busy, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text("لا توجد سجلات حضور متاحة حالياً", style: TextStyle(color: Colors.grey, fontFamily: 'Almarai')),
+          TextButton(onPressed: _fetchAttendanceLogs, child: const Text("تحديث البيانات"))
+        ],
+      ),
+    );
+  }
+}

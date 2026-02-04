@@ -16,40 +16,69 @@ class CurriculumScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+    // تغليف الكود بـ Directionality لضمان ظهور التصميم بشكل صحيح من اليمين لليسار
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        // إضافة AppBar لكي تظهر الشاشة بشكل احترافي مع زر رجوع تلقائي
+        appBar: AppBar(
+          title: const Text(
+            "المنهج / المقرر",
+            style: TextStyle(fontFamily: 'Almarai', fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          child: const Text(
-            "دروس مصاحبة",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Almarai', color: Color(0xFF2E3542)),
-            textAlign: TextAlign.right,
-          ),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF2E3542),
         ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 15,
-              mainAxisSpacing: 15,
-              childAspectRatio: 1.1,
+        backgroundColor: const Color(0xFFF9FAFB), // لون خلفية مريح للعين
+        body: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                "دروس مصاحبة",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Almarai',
+                  color: Color(0xFF2E3542),
+                ),
+                textAlign: TextAlign.right,
+              ),
             ),
-            itemCount: menuItems.length,
-            itemBuilder: (context, index) => _buildMenuCard(context, menuItems[index]),
-          ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 15,
+                  mainAxisSpacing: 15,
+                  childAspectRatio: 1.1,
+                ),
+                itemCount: menuItems.length,
+                itemBuilder: (context, index) => _buildMenuCard(context, menuItems[index]),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
-
   Widget _buildMenuCard(BuildContext context, Map<String, dynamic> item) {
     return InkWell(
       onTap: () {

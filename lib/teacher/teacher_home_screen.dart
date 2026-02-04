@@ -4,11 +4,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'teacher_model.dart';
-import 'attendance_screen.dart';
+import 'attendance_history_screen.dart';
 import 'package:project1/teacher/curriculum/curriculum_screen.dart';
 import 'sessions_screen.dart';
 import 'groups_screen.dart';
-import 'main_attendance_widget.dart'; // تأكدي من نفس اسم الملف
+import 'main_attendance_widget.dart';
+
 // --- الألوان الثابتة ---
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -62,8 +63,8 @@ class TeacherHomeScreen extends StatefulWidget {
 }
 
 class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
-
-  String _currentTitle = "البيانات الشخصية";
+  // جعلنا "الرئيسية" هي الصفحة الافتراضية عند الفتح
+  String _currentTitle = "الرئيسية";
   bool _isLoading = true;
   TeacherData? teacherData;
   List<SessionRecord> _sessions = [];
@@ -75,38 +76,36 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
+
     if (_currentTitle == "البيانات الشخصية") {
       await _fetchTeacherProfile();
     } else if (_currentTitle == "مواعيد الدرس") {
       await _fetchSessions();
-    } else if (_currentTitle == "المنهج / المقرر" || _currentTitle == "المجموعات" || _currentTitle == "الرئيسية") {
+    } else {
+      // الصفحات التي لا تحتاج جلب بيانات فورية من السيرفر في هذه المرحلة
+      await Future.delayed(Duration(milliseconds: 300));
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _fetchTeacherProfile() async {
-    setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
       String? id = prefs.getString('user_id');
       if (id == null) return;
       final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'));
       if (response.statusCode == 200) {
-        print("SERVER DATA: ${response.body}"); // السطر ده هيعرفنا السيرفر باعت إيه بالظبط
         setState(() => teacherData = TeacherModel.fromJson(jsonDecode(response.body)).data);
-
       }
     } catch (e) { debugPrint(e.toString()); }
     setState(() => _isLoading = false);
   }
 
-// داخل _TeacherHomeScreenState في ملف teacher_home_screen.dart
-
   Future<void> _fetchSessions() async {
-    setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id'); // شيلي الـ "6" الثابتة دي فوراً
+      String? id = prefs.getString('user_id');
 
       if (id == null || id.isEmpty) {
         print("Error: No User ID found");
@@ -120,6 +119,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     } catch (e) { debugPrint(e.toString()); }
     setState(() => _isLoading = false);
   }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -135,7 +135,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         ),
         drawer: _buildTeacherSidebar(context),
         body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 500),
+          duration: const Duration(milliseconds: 300),
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: kActiveBlue))
               : RefreshIndicator(
@@ -148,24 +148,24 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   Widget _buildBody() {
-    if (_currentTitle == "البيانات الشخصية") return _buildProfileBody();
-    if (_currentTitle == "مواعيد الدرس") return _buildSessionsBody();
-    if (_currentTitle == "المنهج / المقرر") return CurriculumScreen();
-    if (_currentTitle == "المجموعات") return GroupsScreen();
-
-    // أضيفي هذا السطر ليربط خيار الرئيسية بالشاشة الجديدة
-    if (_currentTitle == "الرئيسية") return MainAttendanceScreen();
-
-    return Center(child: Text("قريباً: $_currentTitle", style: TextStyle(fontFamily: 'Almarai', color: darkBlue)));
+    switch (_currentTitle) {
+      case "الرئيسية":
+        return MainAttendanceScreen();
+      case "البيانات الشخصية":
+        return _buildProfileBody();
+      case "المنهج / المقرر":
+        return CurriculumScreen();
+      case "المجموعات":
+        return GroupsScreen();
+      case "مواعيد الدرس":
+        return _buildSessionsBody();
+      default:
+        return Center(child: Text("قريباً: $_currentTitle", style: TextStyle(fontFamily: 'Almarai', color: darkBlue)));
+    }
   }
+
   // --- واجهة البيانات الشخصية ---
   Widget _buildProfileBody() {
-    String formattedDate = "---";
-    if (teacherData?.joinDate != null) {
-      DateTime d = teacherData!.joinDate!;
-      formattedDate = "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-    }
-
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -176,7 +176,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _infoRow("المكتب التابع له :", teacherData?.loc?.name ?? "---"),
           _infoRow("تاريخ الالتحاق", (teacherData?.joinDate != null && teacherData!.joinDate!.year > 1)
               ? "${teacherData!.joinDate!.day.toString().padLeft(2, '0')}-${teacherData!.joinDate!.month.toString().padLeft(2, '0')}-${teacherData!.joinDate!.year}"
-              : "--"), // لو الداتا لسه مجاتش أو بـ 0 يظهر شرطتين
+              : "--"),
           _infoRow("المؤهل الدراسي :", teacherData?.educationDegree ?? "---"),
         ]),
         const SizedBox(height: 16),
@@ -196,7 +196,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
-        Text("جدول الشيخ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue, fontFamily: 'Almarai')),
+        Text("جدول المواعيد", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue, fontFamily: 'Almarai')),
         const SizedBox(height: 16),
         Container(
           decoration: BoxDecoration(
@@ -212,7 +212,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               columnSpacing: 25,
               headingRowHeight: 50,
               dataRowHeight: 60,
-              headingRowColor: MaterialStateProperty.all(kActiveBlue.withOpacity(0.05)),
+              headingRowColor: WidgetStateProperty.all(kActiveBlue.withOpacity(0.05)),
               columns: const [
                 DataColumn(label: Text('اليوم', style: _headerStyle)),
                 DataColumn(label: Text('الساعة', style: _headerStyle)),
@@ -250,11 +250,13 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   static const TextStyle _cellStyle = TextStyle(fontFamily: 'Almarai', color: Color(0xFF2E3542), fontSize: 13);
   static const TextStyle _cellStyleBold = TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 13);
 
+  // --- السايدبار الموحد (نسخة مصححة) ---
   Widget _buildTeacherSidebar(BuildContext context) {
     return Drawer(
       backgroundColor: Colors.white,
       child: Column(
         children: [
+          // لوجو التطبيق في الأعلى
           Container(
             padding: const EdgeInsets.only(top: 50, bottom: 20),
             child: Center(
@@ -266,31 +268,30 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             ),
           ),
 
+          // جميع العناصر في قائمة واحدة قابلة للتمرير
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _buildSidebarItem(Icons.home_outlined, "الرئيسية"),
+                _buildSidebarItem(Icons.home_outlined, "الرئيسية"), // تأكد أن الاسم يطابق الـ switch case
                 _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
-                _buildSidebarItem(Icons.menu_book_outlined, "المنهج / المقرر"),
-
                 _buildSidebarItem(
                   Icons.fact_check_outlined,
                   "الحضور و الإنصراف",
                   isPushScreen: true,
-                  screen: AttendanceScreen(),
+                  screen: AttendanceHistoryScreen(),
                 ),
-
+                _buildSidebarItem(Icons.menu_book_outlined, "المنهج / المقرر"),
                 _buildSidebarItem(Icons.groups_outlined, "المجموعات"),
                 _buildSidebarItem(Icons.access_time, "مواعيد الدرس"),
               ],
             ),
           ),
 
+          // خط فاصل وزر تسجيل الخروج في أسفل السايدبار
           const Divider(height: 1),
-
           Padding(
-            padding: const EdgeInsets.only(bottom: 30.0),
+            padding: const EdgeInsets.symmetric(vertical: 20.0),
             child: _buildSidebarItem(
               Icons.logout,
               "تسجيل الخروج",
@@ -320,20 +321,18 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         ),
       ),
       onTap: () {
+        Navigator.pop(context); // إغلاق السايدبار فوراً
+
         if (isLogout) {
           _showLogoutDialog();
         } else if (isPushScreen && screen != null) {
-          Navigator.pop(context);
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => screen),
-          );
+          // الانتقال لشاشة جديدة بالكامل
+          Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
         } else {
+          // تغيير المحتوى الداخلي للصفحة الرئيسية
           setState(() {
             _currentTitle = title;
-            _isLoading = true;
           });
-          Navigator.pop(context);
           _loadInitialData();
         }
       },
