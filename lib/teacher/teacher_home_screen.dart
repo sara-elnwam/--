@@ -8,7 +8,7 @@ import 'attendance_screen.dart';
 import 'package:project1/teacher/curriculum/curriculum_screen.dart';
 import 'sessions_screen.dart';
 import 'groups_screen.dart';
-
+import 'main_attendance_widget.dart'; // تأكدي من نفس اسم الملف
 // --- الألوان الثابتة ---
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -151,10 +151,13 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     if (_currentTitle == "البيانات الشخصية") return _buildProfileBody();
     if (_currentTitle == "مواعيد الدرس") return _buildSessionsBody();
     if (_currentTitle == "المنهج / المقرر") return CurriculumScreen();
-    if (_currentTitle == "المجموعات") return GroupsScreen(); // استدعاء شاشة المجموعات المتصلة بالـ API
+    if (_currentTitle == "المجموعات") return GroupsScreen();
+
+    // أضيفي هذا السطر ليربط خيار الرئيسية بالشاشة الجديدة
+    if (_currentTitle == "الرئيسية") return MainAttendanceScreen();
+
     return Center(child: Text("قريباً: $_currentTitle", style: TextStyle(fontFamily: 'Almarai', color: darkBlue)));
   }
-
   // --- واجهة البيانات الشخصية ---
   Widget _buildProfileBody() {
     String formattedDate = "---";

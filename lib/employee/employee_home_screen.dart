@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'employee_model.dart';
 import 'student_details/students_screen.dart';
+import 'employees_details/all_employees_screen.dart'; // تأكدي من أن اسم الملف صحيح هنا
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -240,6 +241,12 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => StudentsScreen()),
+              );
+            } else if (title == "الموظفون") {
+              Navigator.pop(context); // قفل الدرور
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => AllEmployeesScreen()),
               );
             } else {
               _onItemTapped(title);

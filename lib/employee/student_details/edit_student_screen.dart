@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 
-// استيراد تعريفات الألوان من ملف اللوجين لضمان التطابق
+// تعريفات الألوان والمقاسات
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
-final Color greyText = Color(0xFF707070);
+final String baseUrl = 'https://nour-al-eman.runasp.net/api';
 
 class EditStudentScreen extends StatefulWidget {
   final int studentId;
@@ -19,46 +22,45 @@ class EditStudentScreen extends StatefulWidget {
 
 class _EditStudentScreenState extends State<EditStudentScreen> {
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  // الـ Controllers فارغة تماماً لربطها بالداتا الحقيقية
   late TextEditingController nameController;
-  late TextEditingController fatherJobController;
+  late TextEditingController parentJobController;
   late TextEditingController addressController;
   late TextEditingController phoneController;
-  late TextEditingController phone2Controller; // الحقل الناقص من الصور
+  late TextEditingController phone2Controller;
   late TextEditingController schoolController;
 
   DateTime? birthDate;
   DateTime? joinDate;
-
-  String? selectedBranch;
-  String? studentStatus;
-  String? notebookType;
-  String? paymentMethod;
+  int? selectedLocId;
   String? attendanceType;
-
-  bool _isLoading = false;
+  String? paymentType;
+  String? documentType;
+  String? typeInfamily;
 
   @override
   void initState() {
     super.initState();
-    // تهيئة الـ Controllers (تكون فارغة إلا لو تم تمرير داتا حقيقية)
-    nameController = TextEditingController(text: widget.initialData?['name']?.toString() ?? '');
-    fatherJobController = TextEditingController(text: widget.initialData?['fatherJob']?.toString() ?? '');
-    addressController = TextEditingController(text: widget.initialData?['address']?.toString() ?? '');
-    phoneController = TextEditingController(text: widget.initialData?['phone']?.toString() ?? '');
-    phone2Controller = TextEditingController(text: widget.initialData?['phone2']?.toString() ?? '');
-    schoolController = TextEditingController(text: widget.initialData?['governmentSchool']?.toString() ?? '');
+    final data = widget.initialData;
 
-    // ربط القوائم بالبيانات الحقيقية
-    selectedBranch = widget.initialData?['branch'];
-    studentStatus = widget.initialData?['status'];
-    notebookType = widget.initialData?['notebook'];
-    paymentMethod = widget.initialData?['payment'];
-    attendanceType = widget.initialData?['attendance'];
+    nameController = TextEditingController(text: data?['name']?.toString() ?? '');
+    parentJobController = TextEditingController(text: data?['parentJob']?.toString() ?? '');
+    addressController = TextEditingController(text: data?['address']?.toString() ?? '');
+    phoneController = TextEditingController(text: data?['phone']?.toString() ?? '');
+    phone2Controller = TextEditingController(text: data?['phone2']?.toString() ?? '');
+    schoolController = TextEditingController(text: data?['governmentSchool']?.toString() ?? '');
+
+    if (data?['birthDate'] != null) birthDate = DateTime.tryParse(data!['birthDate']);
+    if (data?['joinDate'] != null) joinDate = DateTime.tryParse(data!['joinDate']);
+
+    selectedLocId = data?['locId'];
+    attendanceType = data?['attendanceType'];
+    paymentType = data?['paymentType'];
+    documentType = data?['documentType'];
+    typeInfamily = data?['typeInfamily'];
   }
 
-  // استخدام نفس تصميم الحقول من شاشة اللوجين
   InputDecoration _buildInputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
@@ -66,15 +68,8 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
       filled: true,
       fillColor: Colors.white,
       contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300)
-      ),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade400) // نفس لون فوكس اللوجين
-      ),
-      errorStyle: TextStyle(fontSize: 12, height: 0.8),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade400)),
     );
   }
 
@@ -83,18 +78,13 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
     return Directionality(
       textDirection: ui.TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: Colors.white, // خلفية بيضاء سادة
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.white, // AppBar أبيض عادي
+          backgroundColor: Colors.white,
           elevation: 0,
-          scrolledUnderElevation: 0,
-          title: Text("تعديل بيانات الطالب",
-              style: TextStyle(color: darkBlue, fontSize: 18, fontWeight: FontWeight.bold)),
+          title: Text("تعديل بيانات الطالب", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 18)),
           centerTitle: true,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: darkBlue),
-            onPressed: () => Navigator.pop(context),
-          ),
+          leading: IconButton(icon: Icon(Icons.arrow_back, color: darkBlue), onPressed: () => Navigator.pop(context)),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -103,48 +93,65 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSimpleLabel("الإسم", isRequired: true),
-                TextFormField(controller: nameController, decoration: _buildInputDecoration("اسم الطالب")),
+                _buildLabel("اسم الطالب", isRequired: true),
+                TextFormField(controller: nameController, decoration: _buildInputDecoration("الاسم")),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("وظيفة الأب"),
-                TextFormField(controller: fatherJobController, decoration: _buildInputDecoration("وظيفة الأب")),
+                _buildLabel("وظيفة الأب"),
+                TextFormField(controller: parentJobController, decoration: _buildInputDecoration("الوظيفة")),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("العنوان", isRequired: true),
+                _buildLabel("العنوان", isRequired: true),
                 TextFormField(controller: addressController, decoration: _buildInputDecoration("العنوان بالتفصيل")),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("المكتب التابع له", isRequired: true),
-                DropdownButtonFormField<String>(
-                  value: selectedBranch,
+                _buildLabel("المكتب التابع له", isRequired: true),
+                DropdownButtonFormField<int>(
+                  value: [2].contains(selectedLocId) ? selectedLocId : null,
                   decoration: _buildInputDecoration("اختر المكتب"),
-                  items: ["مدرسة نور الإيمان", "rouby's location", "مسجد الشيخ ابراهيم", "مسجد العباسي", "مكتب الموقف"]
-                      .map((val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
-                  onChanged: (val) => setState(() => selectedBranch = val),
+                  items: [DropdownMenuItem(value: 2, child: Text("مدرسة نور الإيمان"))],
+                  onChanged: (val) => setState(() => selectedLocId = val),
                 ),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("تاريخ الميلاد", isRequired: true),
-                _buildDateBox(birthDate, (date) => setState(() => birthDate = date)),
-                const SizedBox(height: 18),
-
-                _buildSimpleLabel("تاريخ الانضمام للمدرسة", isRequired: true),
-                _buildDateBox(joinDate, (date) => setState(() => joinDate = date)),
-                const SizedBox(height: 18),
-
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSimpleLabel("حالة الطالب", isRequired: true),
+                          _buildLabel("تاريخ الميلاد", isRequired: true),
+                          _buildDateBox(birthDate, (date) => setState(() => birthDate = date)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("تاريخ الانضمام", isRequired: true),
+                          _buildDateBox(joinDate, (date) => setState(() => joinDate = date)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _buildLabel("رقم هاتف ولي الأمر (1)", isRequired: true),
+                TextFormField(controller: phoneController, keyboardType: TextInputType.phone, decoration: _buildInputDecoration("01xxxxxxxxx")),
+                const SizedBox(height: 18),
+                _buildLabel("رقم هاتف ولي الأمر (2)"),
+                TextFormField(controller: phone2Controller, keyboardType: TextInputType.phone, decoration: _buildInputDecoration("اختياري")),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("حالة الطالب", isRequired: true),
                           DropdownButtonFormField<String>(
-                            value: studentStatus,
-                            decoration: _buildInputDecoration("اختر الحالة"),
-                            items: ["يتيم", "ثانوي", "عادي"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                            onChanged: (val) => setState(() => studentStatus = val),
+                            value: ["عادي", "يتيم", "ثانوي"].contains(typeInfamily) ? typeInfamily : null,
+                            decoration: _buildInputDecoration("الحالة"),
+                            items: ["عادي", "يتيم", "ثانوي"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                            onChanged: (val) => setState(() => typeInfamily = val),
                           ),
                         ],
                       ),
@@ -154,12 +161,12 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSimpleLabel("الكراسة", isRequired: true),
+                          _buildLabel("الكراسة", isRequired: true),
                           DropdownButtonFormField<String>(
-                            value: notebookType,
-                            decoration: _buildInputDecoration("اختر النوع"),
+                            value: ["مجاني", "مدفوع"].contains(documentType) ? documentType : null,
+                            decoration: _buildInputDecoration("النوع"),
                             items: ["مجاني", "مدفوع"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                            onChanged: (val) => setState(() => notebookType = val),
+                            onChanged: (val) => setState(() => documentType = val),
                           ),
                         ],
                       ),
@@ -167,51 +174,32 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
                   ],
                 ),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("طريقة الدفع", isRequired: true),
+                _buildLabel("طريقة الدفع", isRequired: true),
                 DropdownButtonFormField<String>(
-                  value: paymentMethod,
+                  value: ["مجاني", "شهري", "6 شهور"].contains(paymentType) ? paymentType : null,
                   decoration: _buildInputDecoration("اختر طريقة الدفع"),
                   items: ["مجاني", "شهري", "6 شهور"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (val) => setState(() => paymentMethod = val),
+                  onChanged: (val) => setState(() => paymentType = val),
                 ),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("الرقم هاتف ولي الامر (1)", isRequired: true),
-                TextFormField(controller: phoneController, keyboardType: TextInputType.phone, decoration: _buildInputDecoration("01xxxxxxxxx")),
+                _buildLabel("المدرسة الحكومية", isRequired: true),
+                TextFormField(controller: schoolController, decoration: _buildInputDecoration("اسم المدرسة")),
                 const SizedBox(height: 18),
-
-                _buildSimpleLabel("الرقم هاتف ولي الامر (2)"),
-                TextFormField(controller: phone2Controller, keyboardType: TextInputType.phone, decoration: _buildInputDecoration("اختياري")),
-                const SizedBox(height: 18),
-
-                _buildSimpleLabel("اسم المدرسة الحكومية", isRequired: true),
-                TextFormField(controller: schoolController, decoration: _buildInputDecoration("المدرسة")),
-                const SizedBox(height: 18),
-
-                _buildSimpleLabel("الحضور", isRequired: true),
+                _buildLabel("الحضور", isRequired: true),
                 DropdownButtonFormField<String>(
-                  value: attendanceType,
-                  decoration: _buildInputDecoration("اختر الحضور"),
-                  items: ["اونلاين", "اوفلاين"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  value: ["اوفلاين", "اونلاين"].contains(attendanceType) ? attendanceType : null,
+                  decoration: _buildInputDecoration("اوفلاين / اونلاين"),
+                  items: ["اوفلاين", "اونلاين"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                   onChanged: (val) => setState(() => attendanceType = val),
                 ),
                 const SizedBox(height: 40),
-
-                // زر الحفظ بتصميم اللوجين
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _updateStudent,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryOrange,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: _isLoading
-                        ? CircularProgressIndicator(color: Colors.white)
-                        : Text('حفـــــظ التعديلات', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                    onPressed: _isLoading ? null : _updateStudentData,
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    child: _isLoading ? CircularProgressIndicator(color: Colors.white) : Text("حفــــظ التعديلات", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -223,57 +211,109 @@ class _EditStudentScreenState extends State<EditStudentScreen> {
     );
   }
 
-  // ويدجت العناوين بنفس تنسيق اللوجين بالضبط
-  Widget _buildSimpleLabel(String text, {bool isRequired = false}) {
+  Future<void> _updateStudentData() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? token = prefs.getString('token');
+
+      // الرابط الصحيح بناءً على تجربة المتصفح
+      final String fullUrl = '$baseUrl/Student/Update';
+      print("Requesting: $fullUrl");
+
+      final Map<String, dynamic> body = {
+        "id": widget.studentId,
+        "name": nameController.text,
+        "phone": phoneController.text,
+        "phone2": phone2Controller.text,
+        "address": addressController.text,
+        "parentJob": parentJobController.text,
+        "governmentSchool": schoolController.text,
+        "attendanceType": attendanceType,
+        "birthDate": birthDate?.toIso8601String(),
+        "joinDate": joinDate?.toIso8601String(),
+        "locId": selectedLocId,
+        "paymentType": paymentType,
+        "documentType": documentType,
+        "typeInfamily": typeInfamily,
+        "levelId": widget.initialData?['levelId'],
+        "groupId": widget.initialData?['groupId'],
+      };
+
+      final response = await http.put(
+        Uri.parse(fullUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+
+      print("Status Code: ${response.statusCode}");
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("تم تحديث بيانات الطالب بنجاح"), backgroundColor: Colors.green)
+        );
+        Navigator.pop(context, true);
+      } else {
+        // طباعة تفاصيل الخطأ من السيرفر لمعرفة إذا كان هناك حقل ناقص
+        print("Error Response: ${response.body}");
+        throw Exception("فشل التحديث: ${response.statusCode}");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("خطأ في الاتصال: $e"), backgroundColor: Colors.red)
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  // محاولة أخيرة برابط مختلف إذا فشل الأول
+  Future<void> _updateWithFallback(String? token, Map<String, dynamic> body) async {
+    final String fallbackUrl = '$baseUrl/Students';
+    final response = await http.put(
+      Uri.parse(fallbackUrl),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم التحديث بنجاح (رابط بديل)")));
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("فشل التحديث النهائي 404")));
+    }
+  }
+
+  Widget _buildLabel(String text, {bool isRequired = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
         Text(text, style: TextStyle(fontSize: 14, color: darkBlue, fontWeight: FontWeight.w600)),
-        if (isRequired) Text(' *', style: TextStyle(color: Colors.red))
+        if (isRequired) Text(" *", style: TextStyle(color: Colors.red)),
       ]),
     );
   }
 
-  // ويدجت اختيار التاريخ بتصميم متناسق
   Widget _buildDateBox(DateTime? date, Function(DateTime) onSelect) {
     return InkWell(
       onTap: () async {
-        DateTime? picked = await showDatePicker(
-          context: context,
-          initialDate: date ?? DateTime.now(),
-          firstDate: DateTime(2000),
-          lastDate: DateTime(2030),
-        );
+        DateTime? picked = await showDatePicker(context: context, initialDate: date ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2030));
         if (picked != null) onSelect(picked);
       },
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(date == null ? "اختيار التاريخ" : DateFormat('yyyy/MM/dd').format(date),
-                style: TextStyle(color: date == null ? Colors.grey.shade400 : darkBlue)),
-            Icon(Icons.calendar_today, color: primaryOrange, size: 18),
+            Text(date == null ? "التاريخ" : DateFormat('yyyy/MM/dd').format(date), style: TextStyle(color: date == null ? Colors.grey : darkBlue, fontSize: 13)),
+            Icon(Icons.calendar_month, color: primaryOrange, size: 18),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _updateStudent() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      // هنا يتم الربط بالـ API لاحقاً
-      await Future.delayed(Duration(seconds: 1));
-      if (mounted) {
-        setState(() => _isLoading = false);
-        Navigator.pop(context);
-      }
-    }
   }
 }

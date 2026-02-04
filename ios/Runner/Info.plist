@@ -3,88 +3,89 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    [cite_start]<string>$(DEVELOPMENT_LANGUAGE)</string> [cite: 1]
     <key>CFBundleDisplayName</key>
-    <string>نور الإيمان</string>
+    [cite_start]<string>نور الإيمان</string> [cite: 1]
     <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
+    [cite_start]<string>$(EXECUTABLE_NAME)</string> [cite: 1]
     <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    [cite_start]<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string> [cite: 1]
     <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
+    [cite_start]<string>6.0</string> [cite: 1]
     <key>CFBundleName</key>
-    <string>project1</string>
+    [cite_start]<string>project1</string> [cite: 1]
     <key>CFBundlePackageType</key>
-    <string>APPL</string>
+    [cite_start]<string>APPL</string> [cite: 1]
     <key>CFBundleShortVersionString</key>
-    <string>$(FLUTTER_BUILD_NAME)</string>
+    [cite_start]<string>$(FLUTTER_BUILD_NAME)</string> [cite: 1]
     <key>CFBundleSignature</key>
-    <string>????</string>
+    [cite_start]<string>????</string> [cite: 1]
     <key>CFBundleVersion</key>
-    <string>$(FLUTTER_BUILD_NUMBER)</string>
+    [cite_start]<string>$(FLUTTER_BUILD_NUMBER)</string> [cite: 1]
     <key>LSRequiresIPhoneOS</key>
-    <true/>
+    [cite_start]<true/> [cite: 1]
+
     <key>UILaunchStoryboardName</key>
-    <string>LaunchScreen</string>
+    [cite_start]<string>LaunchScreen</string> [cite: 2]
     <key>UIMainStoryboardFile</key>
-    <string>Main</string>
+    [cite_start]<string>Main</string> [cite: 2]
 
     <key>NSFaceIDUsageDescription</key>
-    <string>نحتاج للوصول لبصمة الوجه لتأكيد هوية تسجيل الحضور والانصراف.</string>
+    [cite_start]<string>نحتاج للوصول لبصمة الوجه لتأكيد هوية تسجيل الحضور والانصراف.</string> [cite: 2]
 
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>نحتاج للوصول لمكتبة الصور لرفع صور الواجبات</string>
+    [cite_start]<string>نحتاج للوصول لمكتبة الصور لرفع صور الواجبات</string> [cite: 2]
     <key>NSCameraUsageDescription</key>
-    <string>نحتاج للوصول للكاميرا لتصوير الواجب ورفعه</string>
+    [cite_start]<string>نحتاج للوصول للكاميرا لتصوير الواجب ورفعه</string> [cite: 2]
     <key>NSMicrophoneUsageDescription</key>
-    <string>نحتاج للوصول للميكروفون (في حال تسجيل فيديو للمهمة).</string>
+    [cite_start]<string>نحتاج للوصول للميكروفون (في حال تسجيل فيديو للمهمة).</string> [cite: 2]
     <key>NSAppleMusicUsageDescription</key>
-    <string>نحتاج للوصول للملفات لاختيار مستندات الواجب</string>
+    [cite_start]<string>نحتاج للوصول للملفات لاختيار مستندات الواجب</string> [cite: 2]
 
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>نحتاج إلى الوصول إلى موقعك لتسجيل الحضور والإنصراف بدقة.</string>
+    <string>نحتاج للوصول لموقعك لتسجيل الحضور</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>نحتاج إلى الوصول إلى موقعك لتسجيل الحضور والإنصراف حتى عند تشغيل التطبيق في الخلفية.</string>
+    <string>نحتاج للوصول لموقعك لتسجيل الحضور</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>نحتاج إلى الوصول إلى موقعك لتسجيل الحضور والإنصراف بدقة في جميع الأوقات.</string>
+    <string>نحتاج للوصول لموقعك لتسجيل الحضور</string>
 
     <key>LSSupportsOpeningDocumentsInPlace</key>
-    <true/>
+    [cite_start]<true/> [cite: 3]
     <key>UIFileSharingEnabled</key>
-    <true/>
+    [cite_start]<true/> [cite: 3]
     <key>FDMaximumConcurrentTasks</key>
-    <integer>5</integer>
+    [cite_start]<integer>5</integer> [cite: 3]
     <key>FDAllFilesDownloadedMessage</key>
-    <string>تم تحميل جميع الملفات بنجاح</string>
+    [cite_start]<string>تم تحميل جميع الملفات بنجاح</string> [cite: 3]
 
     <key>LSApplicationQueriesSchemes</key>
     <array>
-       <string>http</string>
-       <string>https</string>
-    </array>
+       [cite_start]<string>http</string> [cite: 3]
+       [cite_start]<string>https</string> [cite: 3]
+    [cite_start]</array> [cite: 4]
 
     <key>NSAppTransportSecurity</key>
     <dict>
        <key>NSAllowsArbitraryLoads</key>
-       <true/>
+       [cite_start]<true/> [cite: 4]
     </dict>
 
     <key>UISupportedInterfaceOrientations</key>
     <array>
-       <string>UIInterfaceOrientationPortrait</string>
-       <string>UIInterfaceOrientationLandscapeLeft</string>
-       <string>UIInterfaceOrientationLandscapeRight</string>
+       [cite_start]<string>UIInterfaceOrientationPortrait</string> [cite: 4]
+       [cite_start]<string>UIInterfaceOrientationLandscapeLeft</string> [cite: 4]
+       [cite_start]<string>UIInterfaceOrientationLandscapeRight</string> [cite: 4]
     </array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
-       <string>UIInterfaceOrientationPortrait</string>
-       <string>UIInterfaceOrientationPortraitUpsideDown</string>
-       <string>UIInterfaceOrientationLandscapeLeft</string>
-       <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
+       [cite_start]<string>UIInterfaceOrientationPortrait</string> [cite: 4]
+       [cite_start]<string>UIInterfaceOrientationPortraitUpsideDown</string> [cite: 5]
+       [cite_start]<string>UIInterfaceOrientationLandscapeLeft</string> [cite: 5]
+       [cite_start]<string>UIInterfaceOrientationLandscapeRight</string> [cite: 5]
+    [cite_start]</array> [cite: 5]
     <key>CADisableMinimumFrameDurationOnPhone</key>
-    <true/>
+    [cite_start]<true/> [cite: 5]
     <key>UIApplicationSupportsIndirectInputEvents</key>
-    <true/>
+    [cite_start]<true/> [cite: 5]
 </dict>
 </plist>
