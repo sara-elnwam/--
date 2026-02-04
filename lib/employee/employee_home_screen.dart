@@ -4,10 +4,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/login_screen.dart';
 import 'employee_model.dart';
-import 'employee_attendance_screen.dart'; // الملف الجديد اللي عملناه
+import 'employee_attendance_screen.dart';
 import 'student_details/students_screen.dart';
 import 'employees_details/all_employees_screen.dart';
-import 'employee_attendance_screen.dart';
+// استيراد ملف السجل الجديد
+import 'employee_attendance_history_screen.dart';
+
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -91,8 +93,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   }
 
   Widget _buildBody() {
-    // إذا كانت الصفحة الرئيسية، نعرض واجهة الحضور والإنصراف مباشرة
-    if (_currentTitle == "الصفحة الرئيسية" || _currentTitle == "الحضور و الإنصراف") {
+    if (_currentTitle == "الصفحة الرئيسية" || _currentTitle == "تسجيل حضور") {
       return EmployeeAttendanceScreen();
     }
 
@@ -195,7 +196,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                 children: [
                   _buildSidebarItem(Icons.home_outlined, "الصفحة الرئيسية"),
                   _buildSidebarItem(Icons.person_outline, "البيانات الشخصية"),
-                  _buildSidebarItem(Icons.fact_check_outlined, "الحضور و الإنصراف"),
+                  _buildSidebarItem(Icons.history, "سجل الحضور والإنصراف"),
                   _buildSidebarItem(Icons.school_outlined, "الطلاب"),
                   _buildSidebarItem(Icons.person_search_outlined, "المعلمون"),
                   _buildSidebarItem(Icons.badge_outlined, "الموظفون"),
@@ -211,16 +212,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           const Divider(height: 1),
           _buildSidebarItem(
               Icons.logout,
-              "تسجيل الخروج",
+              "تسجيل الخروج", // دي مهمة عشان الموظف يخرج من الحساب
               color: Colors.redAccent,
               isLogout: true
           ),
-          const SizedBox(height: 100),
+          const SizedBox(height: 50),
         ],
       ),
     );
   }
-
   Widget _buildSidebarItem(IconData icon, String title, {Color? color, bool isLogout = false}) {
     bool isSelected = _currentTitle == title;
     return Padding(
@@ -242,7 +242,16 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           onTap: () {
             if (isLogout) {
               _showLogoutDialog();
-            } else if (title == "الطلاب") {
+            }
+            // اضفت لكِ هذا الشرط للانتقال لصفحة السجل
+            else if (title == "سجل الحضور والإنصراف") {
+              Navigator.pop(context); // 1. قفل السايدبار أولاً
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const EmployeeAttendanceHistoryScreen()),
+              );
+            }
+            else if (title == "الطلاب") {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (context) => StudentsScreen()));
             } else if (title == "الموظفون") {
@@ -256,7 +265,6 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       ),
     );
   }
-
   void _showLogoutDialog() {
     showDialog(
       context: context,
