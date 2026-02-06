@@ -5,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 
-// --- الـ Model ودالة التحويل مدمجين هنا ---
-
 AttendanceModel attendanceModelFromJson(String str) => AttendanceModel.fromJson(json.decode(str));
 
 class AttendanceModel {
@@ -46,7 +44,6 @@ class AttendanceData {
   }
 }
 
-// --- بداية الشاشة ---
 
 class EmployeeAttendanceHistoryScreen extends StatefulWidget {
   const EmployeeAttendanceHistoryScreen({super.key});
@@ -140,9 +137,8 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
           backgroundColor: Colors.white,
           elevation: 0.5,
 
-          // --- التعديل الجذري هنا لإخفاء السهم نهائياً ---
-          automaticallyImplyLeading: false, // يمنع Flutter من وضع سهم تلقائي
-          leading: null, // يلغي وجود أي عنصر في جهة اليمين/اليسار (حسب الاتجاه)
+          automaticallyImplyLeading: false,
+          leading: null,
         ),
         body: _isLoading
             ? const Center(

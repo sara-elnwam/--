@@ -8,6 +8,7 @@ import 'employee_attendance_screen.dart';
 import 'student_details/students_screen.dart';
 import 'employees_details/all_employees_screen.dart';
 import 'employee_attendance_history_screen.dart';
+import 'reports_screen/reports_screen.dart'; // تأكد من اسم الملف
 
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
@@ -95,17 +96,18 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             : IndexedStack(
           index: _currentIndex,
           children: [
-            EmployeeAttendanceScreen(),          // Index 0
-            _buildPersonalDataContent(),         // Index 1
-            EmployeeAttendanceHistoryScreen(),   // Index 2
-            StudentsScreen(),                    // Index 3
-            AllEmployeesScreen(),                // Index 4
-            _buildPlaceholder("المعلمون"),        // Index 5
-            _buildPlaceholder("المستويات"),       // Index 6
-            _buildPlaceholder("الفروع"),          // Index 7
-            _buildPlaceholder("الدورات"),         // Index 8
-            _buildPlaceholder("قائمة الإنتظار"),    // Index 9
-            _buildPlaceholder("إدارة الموظفين"),   // Index 10
+            EmployeeAttendanceScreen(),          // 0
+            _buildPersonalDataContent(),         // 1
+            EmployeeAttendanceHistoryScreen(),   // 2
+            StudentsScreen(),                    // 3
+            AllEmployeesScreen(),                // 4
+            _buildPlaceholder("المعلمون"),        // 5
+            _buildPlaceholder("المستويات"),       // 6
+            _buildPlaceholder("الفروع"),          // 7
+            _buildPlaceholder("الدورات"),         // 8
+            _buildPlaceholder("قائمة الإنتظار"),    // 9
+            _buildPlaceholder("إدارة الموظفين"),   // 10
+            ReportsScreen(),                     // 11 (تمت الإضافة هنا)
           ],
         ),
       ),
@@ -222,6 +224,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                   _buildSidebarItem(Icons.menu_book_outlined, "الدورات", 8),
                   _buildSidebarItem(Icons.hourglass_empty, "قائمة الإنتظار", 9),
                   _buildSidebarItem(Icons.manage_accounts_outlined, "إدارة الموظفين", 10),
+                  _buildSidebarItem(Icons.assessment_outlined, "التقارير", 11),
                 ],
               ),
             ),
