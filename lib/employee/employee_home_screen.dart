@@ -9,7 +9,7 @@ import 'student_details/students_screen.dart';
 import 'employees_details/all_employees_screen.dart';
 import 'employee_attendance_history_screen.dart';
 import 'reports_screen/reports_screen.dart'; // تأكد من اسم الملف
-
+import 'staff_management_screen/staff_management_screen.dart';
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -106,8 +106,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             _buildPlaceholder("الفروع"),          // 7
             _buildPlaceholder("الدورات"),         // 8
             _buildPlaceholder("قائمة الإنتظار"),    // 9
-            _buildPlaceholder("إدارة الموظفين"),   // 10
-            ReportsScreen(),                     // 11 (تمت الإضافة هنا)
+            StaffManagementScreen(),             // 10 (تم التعديل هنا)
+            ReportsScreen(),                     // 11
           ],
         ),
       ),

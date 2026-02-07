@@ -244,7 +244,7 @@ class _StudentReportsScreenState extends State<StudentReportsScreen> with Single
           child: Container(
             color: Colors.white,
             child: reportResults.isEmpty
-                ? const Center(child: Text("لا توجد نتائج بحث حالياً", style: TextStyle(fontFamily: 'Almarai', color: Colors.grey)))
+                ? const Center(child: Text("جاري تطوير هذه الصفحة...", style: TextStyle(fontFamily: 'Almarai', color: Colors.red)))
                 : ListView.builder(
               itemCount: reportResults.length,
               itemBuilder: (context, index) => ListTile(title: Text(reportResults[index].testName)),
@@ -381,7 +381,7 @@ class _StudentReportsScreenState extends State<StudentReportsScreen> with Single
     child: ElevatedButton(
       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
       onPressed: _submitReportRequest,
-      child: const Text("عرض التقرير", style: TextStyle(fontFamily: 'Almarai', color: Colors.white, fontWeight: FontWeight.bold)),
+      child: const Text("إرسال الطلب ", style: TextStyle(fontFamily: 'Almarai', color: Colors.white, fontWeight: FontWeight.bold)),
     ),
   );
 }

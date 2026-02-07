@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'student_reports_screen.dart'; // استيراد ملف تقارير الطلاب الجديد
+import 'TeacherReportsScreen.dart'; // استيراد ملف تقارير الطلاب الجديد
 
 class ReportsScreen extends StatefulWidget {
   @override
@@ -44,9 +45,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 40),
-            const Text("مركز التقارير", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2E3542), fontFamily: 'Almarai')),
+            const Text(" ", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2E3542), fontFamily: 'Almarai')),
             const SizedBox(height: 8),
-            const Text("اختر القسم لاستخراج التقارير التفصيلية", style: TextStyle(color: Colors.grey, fontFamily: 'Almarai', fontSize: 15)),
+            const Text("", style: TextStyle(color: Colors.grey, fontFamily: 'Almarai', fontSize: 15)),
             const SizedBox(height: 40),
             Expanded(
               child: ListView.separated(
@@ -73,8 +74,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     return GestureDetector(
       onTap: () {
         if (title == 'تقارير الطالب') {
-          // الربط بشاشة التبويبات الجديدة
           Navigator.of(context).push(MaterialPageRoute(builder: (context) => StudentReportsScreen()));
+        } else if (title == 'تقارير المعلم') {
+          // الانتقال لشاشة تقارير المعلمين الجديدة
+          Navigator.of(context).push(MaterialPageRoute(builder: (context) => TeacherReportsScreen()));
         } else {
           Navigator.of(context).push(_createFadeRoute(title));
         }
