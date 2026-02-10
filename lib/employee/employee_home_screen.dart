@@ -10,6 +10,9 @@ import 'employees_details/all_employees_screen.dart';
 import 'employee_attendance_history_screen.dart';
 import 'reports_screen/reports_screen.dart'; // تأكد من اسم الملف
 import 'staff_management_screen/staff_management_screen.dart';
+import 'waiting_list_screen/waiting_list_screen.dart';
+
+
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -93,7 +96,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         // استخدام IndexedStack لتبديل المحتوى مع بقاء السايدبار متاحاً
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
-            : IndexedStack(
+            : // داخل ملف employee_home_screen.dart
+        IndexedStack(
           index: _currentIndex,
           children: [
             EmployeeAttendanceScreen(),          // 0
@@ -105,8 +109,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             _buildPlaceholder("المستويات"),       // 6
             _buildPlaceholder("الفروع"),          // 7
             _buildPlaceholder("الدورات"),         // 8
-            _buildPlaceholder("قائمة الإنتظار"),    // 9
-            StaffManagementScreen(),             // 10 (تم التعديل هنا)
+            WaitingListScreen(),                 // 9 <--- تم التعديل هنا
+            StaffManagementScreen(),             // 10
             ReportsScreen(),                     // 11
           ],
         ),
