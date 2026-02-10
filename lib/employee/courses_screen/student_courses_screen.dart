@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 
@@ -17,14 +18,23 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
 
   List<dynamic> currentData = [];
   bool isLoading = true;
-  int _currentTabIndex = 0;
+  int _currentTabIndex = 4; // نبدأ بالمقررات مثلاً (ID: 4)
 
-  // متغيرات الـ Popup
+  // Controllers للـ Popups
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController descController = TextEditingController();
   bool isMandatory = false;
+  String? selectedLevelId;
+  File? selectedFile;
   String? selectedFileName;
-  String? selectedLevel;
 
-  final List<String> levelsList = ["المستوى الأول", "المستوى الثاني", "المستوى الثالث", "المستوى الرابع"];
+  // تعريف القائمة بشكل صحيح كـ Map لتجنب خطأ الـ Type
+  final List<Map<String, dynamic>> levelsData = [
+    {"name": "المستوى الأول", "id": "1"},
+    {"name": "المستوى الثاني", "id": "2"},
+    {"name": "المستوى الثالث", "id": "3"},
+    {"name": "المستوى الرابع", "id": "4"},
+  ];
 
   final List<Map<String, dynamic>> tabItems = [
     {'title': 'الاختبارات', 'id': 5},
@@ -37,9 +47,10 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
   @override
   void initState() {
     super.initState();
-    fetchData(tabItems[0]['id']);
+    fetchData(tabItems[4]['id']); // تحميل المقررات افتراضياً
   }
 
+  // 1. جلب البيانات (GET)
   Future<void> fetchData(int typeId) async {
     setState(() => isLoading = true);
     try {
@@ -52,18 +63,140 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
           currentData = decodedData['data'] ?? [];
           isLoading = false;
         });
-      } else {
-        setState(() => isLoading = false);
       }
     } catch (e) {
       setState(() => isLoading = false);
     }
   }
 
+  // 2. الحذف (DELETE)
+  Future<void> deleteItem(int id) async {
+    try {
+      // السيرفر يتوقع طلب POST للحذف مع الـ ID في الرابط
+      final response = await http.post(
+        Uri.parse("https://nour-al-eman.runasp.net/api/StudentCources/Delete?id=$id"),
+      );
+
+      if (response.statusCode == 200) {
+        Navigator.pop(context); // إغلاق نافذة التأكيد
+        fetchData(tabItems[_currentTabIndex]['id']); // تحديث الجدول
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("تم الحذف بنجاح"), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("فشل الحذف: ${response.statusCode}")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error deleting: $e");
+    }
+  }
+
+  Future<void> submitData({required bool isEdit, int? id}) async {
+    // 1. التأكد من وجود ملف (السيرفر يجبرك على وجود ملف كما رأينا في الخطأ 400)
+    if (selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("يرجى اختيار ملف أولاً"), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // 2. تحديد الرابط الصحيح (تغيير Add إلى Save بناءً على السيرفر عندك)
+    final String endpoint = isEdit ? "Update" : "Save";
+
+    // بناء الرابط مع الـ Query Parameters لأن السيرفر يتوقعها في الرابط (Query String)
+    final String url = "https://nour-al-eman.runasp.net/api/StudentCources/$endpoint"
+        "?Name=${Uri.encodeComponent(nameController.text)}"
+        "&Description=${Uri.encodeComponent(descController.text)}"
+        "&LevelId=${selectedLevelId ?? "1"}"
+        "&Mandatory=$isMandatory"
+        "&TypeId=${tabItems[_currentTabIndex]['id']}";
+
+    if (isEdit) {
+      // إذا كان تعديل، نضيف الـ ID للرابط أيضاً
+      // url += "&Id=$id";
+    }
+
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse(url));
+
+      // 3. إضافة الملف (تأكد أن اسم الحقل 'file' صغير وليس 'File' كما في الـ Swagger)
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        selectedFile!.path,
+      ));
+
+      var response = await request.send();
+
+      if (response.statusCode == 200) {
+        Navigator.pop(context); // إغلاق النافذة
+        fetchData(tabItems[_currentTabIndex]['id']); // تحديث الجدول
+
+        // إعادة تعيين الحقول
+        nameController.clear();
+        descController.clear();
+        setState(() {
+          selectedFile = null;
+          selectedFileName = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("تمت العملية بنجاح"), backgroundColor: Colors.green),
+        );
+      } else {
+        // طباعة الخطأ إذا لم يكن 200
+        final respStr = await response.stream.bytesToString();
+        debugPrint("خطأ من السيرفر: $respStr");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("فشل الطلب: ${response.statusCode}")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Exception: $e");
+    }
+  }
+  Future<void> addItem() async {
+    if (selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى اختيار ملف أولاً")));
+      return;
+    }
+
+    // بناء الرابط مع الـ Query Parameters كما تظهر في صورة الـ Payload
+    final String url = "https://nour-al-eman.runasp.net/api/StudentCources/Save"
+        "?Name=${nameController.text}"
+        "&Description=${descController.text}"
+        "&LevelId=${selectedLevelId ?? "1"}"
+        "&Mandatory=$isMandatory"
+        "&TypeId=${tabItems[_currentTabIndex]['id']}";
+
+    var request = http.MultipartRequest('POST', Uri.parse(url));
+
+    // إضافة الملف - تأكد أن اسم الحقل 'file' صغير كما في الصورة
+    request.files.add(await http.MultipartFile.fromPath(
+      'file',
+      selectedFile!.path,
+    ));
+
+    try {
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        Navigator.pop(context); // إغلاق المودال
+        fetchData(tabItems[_currentTabIndex]['id']); // تحديث الجدول
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تمت الإضافة بنجاح")));
+      } else {
+        print("Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Exception: $e");
+    }
+  }
   Future<void> _pickFile(StateSetter setModalState) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null) {
       setModalState(() {
+        selectedFile = File(result.files.single.path!);
         selectedFileName = result.files.single.name;
       });
     }
@@ -75,120 +208,113 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
       textDirection: TextDirection.rtl,
       child: DefaultTabController(
         length: tabItems.length,
+        initialIndex: 4,
         child: Scaffold(
           backgroundColor: kBgColor,
           appBar: AppBar(
             backgroundColor: Colors.white,
             elevation: 0.5,
-            title: Text("دورات الطلاب", style: TextStyle(color: kDarkBlue, fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Almarai')),
+            title: const Text("دورات الطلاب", style: TextStyle(color: Color(0xFF2E3542), fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Almarai')),
             bottom: TabBar(
               isScrollable: true,
               indicatorColor: kPrimaryOrange,
               labelColor: kPrimaryOrange,
-              unselectedLabelColor: Colors.grey,
               onTap: (index) {
                 setState(() => _currentTabIndex = index);
                 fetchData(tabItems[index]['id']);
               },
-              labelStyle: const TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, fontSize: 13),
               tabs: tabItems.map((item) => Tab(text: item['title'])).toList(),
             ),
           ),
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddEditModal(context, isEdit: false),
             backgroundColor: kPrimaryOrange,
-            child: const Icon(Icons.add, color: Colors.white, size: 30),
+            child: const Icon(Icons.add, color: Colors.white),
           ),
-          body: Column(
-            children: [
-              _buildSectionTitle(),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: 750,
-                    child: Column(
-                      children: [
-                        _buildTableHeader(),
-                        Expanded(
-                          child: isLoading
-                              ? Center(child: CircularProgressIndicator(color: kPrimaryOrange))
-                              : _buildDataTable(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          body: isLoading
+              ? Center(child: CircularProgressIndicator(color: kPrimaryOrange))
+              : _buildMainContent(),
         ),
       ),
     );
   }
 
-  Widget _buildSectionTitle() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        children: [
-          Icon(Icons.table_chart_outlined, color: kPrimaryOrange, size: 20),
-          const SizedBox(width: 8),
-          Text("قائمة ${tabItems[_currentTabIndex]['title']}", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: kDarkBlue)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTableHeader() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(color: Colors.grey.shade200, border: Border.all(color: Colors.grey.shade300), borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-      child: Row(
-        children: const [
-          Expanded(flex: 3, child: Text("الاسم", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          Expanded(flex: 4, child: Text("الوصف", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          Expanded(flex: 2, child: Text("المستوى", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          Expanded(flex: 1, child: Center(child: Text("إجباري", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-          Expanded(flex: 1, child: Center(child: Text("تعديل", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-          Expanded(flex: 1, child: Center(child: Text("حذف", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataTable() {
-    if (currentData.isEmpty) return const Center(child: Text("لا توجد بيانات حالياً"));
-    return ListView.builder(
-      padding: const EdgeInsets.only(left: 12, right: 12, bottom: 80),
-      itemCount: currentData.length,
-      itemBuilder: (context, index) {
-        final item = currentData[index];
-        return Container(
-          decoration: BoxDecoration(color: Colors.white, border: Border(left: BorderSide(color: Colors.grey.shade300), right: BorderSide(color: Colors.grey.shade300), bottom: BorderSide(color: Colors.grey.shade300))),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            child: Row(
-              children: [
-                Expanded(flex: 3, child: Text(item['name'] ?? "-", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))),
-                Expanded(flex: 4, child: Text(item['description'] ?? "-", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.grey))),
-                Expanded(flex: 2, child: Text(item['level'] != null ? item['level']['name'].toString() : "-", style: const TextStyle(fontSize: 11))),
-                Expanded(flex: 1, child: Center(child: Icon((item['mandatory'] == true) ? Icons.check : Icons.close, color: Colors.red, size: 18))),
-                Expanded(flex: 1, child: InkWell(onTap: () => _showAddEditModal(context, isEdit: true, data: item), child: Icon(Icons.edit_note, color: kPrimaryOrange, size: 22))),
-                Expanded(flex: 1, child: InkWell(onTap: () => _showDeleteDialog(context), child: const Icon(Icons.delete, color: Colors.red, size: 20))),
-              ],
+  Widget _buildMainContent() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.table_chart_outlined, color: kPrimaryOrange, size: 20),
+              const SizedBox(width: 8),
+              Text("قائمة ${tabItems[_currentTabIndex]['title']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: 800,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: currentData.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) return _buildHeader();
+                  return _buildRow(currentData[index - 1]);
+                },
+              ),
             ),
           ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+      child: Row(
+        children: const [
+          Expanded(flex: 3, child: Text("الاسم", style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 4, child: Text("الوصف", style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text("المستوى", style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(flex: 1, child: Center(child: Text("إجباري"))),
+          Expanded(flex: 1, child: Center(child: Text("تعديل"))),
+          Expanded(flex: 1, child: Center(child: Text("حذف"))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(dynamic item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text(item['name'] ?? "")),
+          Expanded(flex: 4, child: Text(item['description'] ?? "", maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(item['level']?['name'] ?? "-")),
+          Expanded(flex: 1, child: Center(child: Icon(item['mandatory'] == true ? Icons.check : Icons.close, color: Colors.red, size: 18))),
+          Expanded(flex: 1, child: InkWell(onTap: () => _showAddEditModal(context, isEdit: true, data: item), child: Icon(Icons.edit_note, color: kPrimaryOrange, size: 24))),
+          InkWell(
+            onTap: () => _showDeleteDialog(context, item['id']), // تأكد أن المفتاح هو 'id' وليس 'Id'
+            child: const Icon(Icons.delete, color: Colors.red, size: 20),
+          ),
+        ],
+      ),
     );
   }
 
   void _showAddEditModal(BuildContext context, {required bool isEdit, dynamic data}) {
-    // تم إصلاح الخطأ هنا باستخدام القوسين
+    nameController.text = isEdit ? (data['name'] ?? "") : "";
+    descController.text = isEdit ? (data['description'] ?? "") : "";
     isMandatory = isEdit ? (data['mandatory'] ?? false) : false;
-    selectedLevel = isEdit ? (data['level'] != null ? data['level']['name'] : null) : null;
+    selectedLevelId = isEdit ? data['levelId']?.toString() : "1";
+    selectedFile = null;
     selectedFileName = null;
 
     showDialog(
@@ -196,63 +322,40 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            width: MediaQuery.of(context).size.width * 0.9,
-            padding: const EdgeInsets.all(20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(5)),
-                        child: const Icon(Icons.close, size: 16),
-                      ),
-                    ),
-                  ),
-                  _buildPopupField("الاسم*", isEdit ? data['name'] : "ادخل اسم المقرر"),
-                  _buildPopupField("التفاصيل*", isEdit ? data['description'] : "ادخل تفاصيل المقرر"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(alignment: Alignment.topLeft, child: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context))),
+                _buildInput("الاسم*", nameController),
+                _buildInput("التفاصيل*", descController),
 
-                  // دروب داون المستويات
-                  _buildDropdownField(setModalState),
-                  const SizedBox(height: 15),
+                // دروب داون المستويات
+                const Align(alignment: Alignment.centerRight, child: Text("المستوى*", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedLevelId,
+                  items: levelsData.map((e) => DropdownMenuItem(value: e['id'].toString(), child: Text(e['name']))).toList(),
+                  onChanged: (val) => setModalState(() => selectedLevelId = val),
+                ),
 
-                  // رفع الملفات
-                  _buildFileUploadSection(setModalState),
-                  const SizedBox(height: 15),
+                const SizedBox(height: 15),
+                _buildFileSection(setModalState),
 
-                  // زر إجباري
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isMandatory,
-                        activeColor: kPrimaryOrange,
-                        onChanged: (val) => setModalState(() => isMandatory = val!),
-                      ),
-                      const Text("إجباري", style: TextStyle(fontFamily: 'Almarai', fontSize: 13)),
-                    ],
-                  ),
+                CheckboxListTile(
+                  title: const Text("إجباري", style: TextStyle(fontSize: 13)),
+                  value: isMandatory,
+                  activeColor: kPrimaryOrange,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) => setModalState(() => isMandatory = val!),
+                ),
 
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPrimaryOrange,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: Text(isEdit ? "حفظ" : "إضافة", style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Almarai')),
-                    ),
-                  ),
-                ],
-              ),
+                ElevatedButton(
+                  onPressed: () => submitData(isEdit: isEdit, id: isEdit ? data['id'] : null),
+                  style: ElevatedButton.styleFrom(backgroundColor: kPrimaryOrange, minimumSize: const Size(double.infinity, 45)),
+                  child: Text(isEdit ? "حفظ التعديل" : "إضافة", style: const TextStyle(color: Colors.white)),
+                )
+              ],
             ),
           ),
         ),
@@ -260,58 +363,36 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
     );
   }
 
-  Widget _buildDropdownField(StateSetter setModalState) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("المستويات*", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
-        const SizedBox(height: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              hint: Text(selectedLevel ?? "اختيار المستويات", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              items: levelsList.map((String value) {
-                return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontSize: 12)));
-              }).toList(),
-              onChanged: (val) => setModalState(() => selectedLevel = val),
-            ),
-          ),
-        ),
-      ],
+  Widget _buildInput(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          TextField(controller: controller, decoration: const InputDecoration(isDense: true)),
+        ],
+      ),
     );
   }
 
-  Widget _buildFileUploadSection(StateSetter setModalState) {
-    return Column(
-      children: [
-        Container(
-          height: 45,
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-          child: Row(
-            children: [
-              Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text(selectedFileName ?? "No file chosen", style: const TextStyle(fontSize: 11, color: Colors.grey), overflow: TextOverflow.ellipsis))),
-              InkWell(
-                onTap: () => _pickFile(setModalState),
-                child: Container(
-                  width: 90,
-                  height: double.infinity,
-                  decoration: BoxDecoration(color: Colors.grey.shade200, border: Border(right: BorderSide(color: Colors.grey.shade300))),
-                  child: const Center(child: Text("Choose File", style: TextStyle(fontSize: 11))),
-                ),
-              ),
-            ],
-          ),
+  Widget _buildFileSection(StateSetter setModalState) {
+    return InkWell(
+      onTap: () => _pickFile(setModalState),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_upload_outlined, color: Colors.blue, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Text(selectedFileName ?? "اختيار ملف", style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis)),
+          ],
         ),
-        const SizedBox(height: 5),
-        const Align(alignment: Alignment.centerRight, child: Icon(Icons.cloud_upload_outlined, color: Colors.blue, size: 20)),
-      ],
+      ),
     );
   }
-
-  void _showDeleteDialog(BuildContext context) {
+  void _showDeleteDialog(BuildContext context, dynamic id) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -319,36 +400,38 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 20),
+            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 50),
+            const SizedBox(height: 15),
             const Text("تأكيد الحذف!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Almarai')),
-            const SizedBox(height: 30),
+            const SizedBox(height: 10),
+            const Text("هل أنت متأكد من حذف هذا السجل؟", textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 25),
             Row(
               children: [
-                Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: kPrimaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')))),
+                // زر التأكيد
+                // زر التأكيد داخل الـ Row في دالة _showDeleteDialog
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      deleteItem(id); // استدعاء الدالة وتمرير الـ ID
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    child: const Text("تأكيد", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: kPrimaryOrange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text("إلغاء", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')))),
+                // زر الإلغاء
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                    child: const Text("إلغاء", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
               ],
             )
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPopupField(String label, String hint) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
-          const SizedBox(height: 5),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-            child: TextField(decoration: InputDecoration(hintText: hint, hintStyle: const TextStyle(fontSize: 12, color: Colors.grey), border: InputBorder.none)),
-          ),
-        ],
       ),
     );
   }
