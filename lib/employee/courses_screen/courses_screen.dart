@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'student_courses_screen.dart';
-
+import 'teacher_courses_screen.dart'; // تأكد أن الاسم مطابق لاسم الملف اللي سيفته عندك
 class CoursesScreen extends StatelessWidget {
   const CoursesScreen({super.key});
 
@@ -40,16 +40,22 @@ class CoursesScreen extends StatelessWidget {
               );
             },
           ),
-          // كرت دورات المعلمين
-          _buildCourseRowCard(
-            context,
-            title: "دورات المعلمين",
-            icon: Icons.person_search_outlined,
-            primaryColor: kActiveBlue,
-            textColor: darkBlue,
-            onTap: () {
-              // Navigator.push...
-            },
+
+        _buildCourseRowCard(
+          context,
+          title: "دورات المعلمين",
+          icon: Icons.assignment_ind_outlined,
+          primaryColor: Colors.green,
+          textColor: darkBlue,
+          onTap: () {
+            // التعديل هنا:
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TeacherCoursesScreen()),
+            );
+          },
+
+
           ),
         ],
       ),
