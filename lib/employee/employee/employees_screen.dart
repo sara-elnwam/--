@@ -27,13 +27,13 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     _fetchTeachersData();
   }
 
+  // --- جلب بيانات المعلمين ---
   Future<void> _fetchTeachersData() async {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      // الرابط المخصص للمعلمين
       final url = Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetWithType/?type=1');
 
       final response = await http.get(url, headers: {
@@ -45,7 +45,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
         final dynamic responseData = json.decode(response.body);
         List<dynamic> dataList = [];
 
-        // التحقق مما إذا كانت البيانات بداخل 'data' أو هي القائمة مباشرة
         if (responseData is Map && responseData.containsKey('data')) {
           dataList = responseData['data'];
         } else if (responseData is List) {
@@ -63,18 +62,76 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           _isLoading = false;
         });
       } else {
-        print("خطأ من السيرفر: ${response.statusCode}");
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      print("حدث خطأ: $e");
       setState(() => _isLoading = false);
     }
   }
+
+  // --- وظيفة الحذف (Deactivate) المحدثة بناءً على الـ API ---
+  Future<void> _deleteEmployee(int id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString('token');
+
+      // بناء الرابط مع الـ Query Parameters كما في الصورة (id & type)
+      final url = Uri.parse('https://nour-al-eman.runasp.net/api/Account/DeActivate?id=$id&type=1');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json', // كما هو ظاهر في Headers الطلب
+        },
+      );
+
+      // التأكد من نجاح العملية (Status Code 200) ورسالة Success في الـ Response
+      if (response.statusCode == 200) {
+        final resBody = jsonDecode(response.body);
+        if (resBody['message'] == "Success") {
+          _showSnackBar("تم حذف المدرس بنجاح", Colors.green);
+          _fetchTeachersData(); // تحديث الجدول
+        } else {
+          _showSnackBar("فشل في الحذف: ${resBody['message']}", Colors.red);
+        }
+      } else {
+        _showSnackBar("فشل في الاتصال بالسيرفر: ${response.statusCode}", Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar("حدث خطأ غير متوقع", Colors.red);
+    }
+  }
+
+  // --- وظيفة تحديث كلمة المرور ---
+  Future<void> _updatePassword(int empId, String newPassword) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString('token');
+
+      final response = await http.post(
+        Uri.parse('https://nour-al-eman.runasp.net/api/Student/ResetPassword'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({"id": empId, "password": newPassword}),
+      );
+
+      if (response.statusCode == 200) {
+        _showSnackBar("تم تغيير كلمة المرور بنجاح", Colors.green);
+      } else {
+        _showSnackBar("فشل تحديث كلمة المرور", Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar("حدث خطأ أثناء التحديث", Colors.red);
+    }
+  }
+
   void _filterSearch(String query) {
     setState(() {
       _filteredEmployees = _allEmployees
-          .where((emp) => emp.name!.toLowerCase().contains(query.toLowerCase()))
+          .where((emp) => (emp.name ?? "").toLowerCase().contains(query.toLowerCase()))
           .toList();
     });
   }
@@ -86,7 +143,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        // ابحث عن السطر ده وغير قيمته من true لـ false
         centerTitle: false,
         title: _isSearching
             ? TextField(
@@ -94,9 +150,17 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           autofocus: true,
           onChanged: _filterSearch,
           textAlign: TextAlign.right,
-          decoration: const InputDecoration(hintText: "ابحث عن معلم...", border: InputBorder.none, hintStyle: TextStyle(fontFamily: 'Almarai', fontSize: 14)),
+          decoration: const InputDecoration(
+              hintText: "ابحث عن معلم...",
+              border: InputBorder.none,
+              hintStyle: TextStyle(fontFamily: 'Almarai', fontSize: 14)),
         )
-            : Text("اسماء  المعلمين", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: kTextDark, fontSize: 16)),
+            : Text("اسماء المعلمين",
+            style: TextStyle(
+                fontFamily: 'Almarai',
+                fontWeight: FontWeight.bold,
+                color: kTextDark,
+                fontSize: 16)),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search, color: kPrimaryBlue),
@@ -160,8 +224,14 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                             builder: (c) => StaffDetailsScreen(staffId: teacher.id!, staffName: teacher.name!),
                           ));
                         }),
-                        _buildActionCell(Icons.lock_open_rounded, Colors.blue[400]!, () {}),
-                        _buildActionCell(Icons.delete_outline, Colors.red[400]!, () {}),
+                        // زر تعيين كلمة السر
+                        _buildActionCell(Icons.lock_open_rounded, Colors.blue[400]!, () {
+                          _showResetPasswordDialog(teacher.id!, teacher.name ?? "");
+                        }),
+                        // زر الحذف
+                        _buildActionCell(Icons.delete_outline, Colors.red[400]!, () {
+                          _showDeleteConfirmDialog(teacher.id!);
+                        }),
                       ],
                     );
                   }).toList(),
@@ -174,21 +244,143 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
+  // --- Widgets مساعدة ---
+
   Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
-      child: Text(text, textAlign: align, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700], fontFamily: 'Almarai')),
+      child: Text(text,
+          textAlign: align,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700], fontFamily: 'Almarai')),
     );
   }
 
   Widget _buildDataCell(String text, {TextAlign align = TextAlign.center, bool isBold = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
-      child: Text(text, textAlign: align, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: isBold ? FontWeight.w600 : FontWeight.normal, color: kTextDark, fontFamily: 'Almarai')),
+      child: Text(text,
+          textAlign: align,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+              color: kTextDark,
+              fontFamily: 'Almarai')),
     );
   }
 
   Widget _buildActionCell(IconData icon, Color color, VoidCallback onTap) {
     return IconButton(icon: Icon(icon, color: color, size: 22), onPressed: onTap);
+  }
+
+  // --- بوب آب تغيير كلمة المرور ---
+  void _showResetPasswordDialog(int empId, String empName) {
+    final TextEditingController _passController = TextEditingController();
+    final TextEditingController _confirmPassController = TextEditingController();
+    bool _isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            title: const Text("إعادة تعيين كلمة السر",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Almarai')),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("إدخال كلمة المرور الجديدة للشيخ: $empName",
+                      style: const TextStyle(fontSize: 13, color: Colors.grey, fontFamily: 'Almarai')),
+                  const SizedBox(height: 20),
+                  _buildPopupTextField("كلمة المرور", _passController),
+                  const SizedBox(height: 15),
+                  _buildPopupTextField("تأكيد كلمة المرور", _confirmPassController),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("إلغاء", style: TextStyle(color: Colors.red, fontFamily: 'Almarai')),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                  if (_passController.text.length < 6) {
+                    _showSnackBar("كلمة المرور قصيرة جداً", Colors.orange);
+                    return;
+                  }
+                  if (_passController.text != _confirmPassController.text) {
+                    _showSnackBar("كلمة المرور غير متطابقة", Colors.orange);
+                    return;
+                  }
+                  setDialogState(() => _isSubmitting = true);
+                  await _updatePassword(empId, _passController.text);
+                  if (mounted) Navigator.pop(context);
+                },
+                child: _isSubmitting
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text("تغيير", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- بوب آب الحذف ---
+  void _showDeleteConfirmDialog(int empId) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          content: const Text("هل أنت متأكد من حذف هذا المدرس؟",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteEmployee(empId);
+              },
+              child: const Text("تأكيد الحذف", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPopupTextField(String label, TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      obscureText: true,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(fontSize: 12, fontFamily: 'Almarai'),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Almarai')), backgroundColor: color));
   }
 }

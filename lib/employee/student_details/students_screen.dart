@@ -170,42 +170,52 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
+  // --- بوب آب الحذف المحدث بنفس ستايل شاشة المدرسين ---
   void _showDeleteConfirmDialog(int studentId) {
     showDialog(
       context: context,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           content: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Text("تأكيد حذف الطلاب؟",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.redAccent, fontFamily: 'Almarai')),
+            padding: EdgeInsets.only(top: 20),
+            child: Text(
+              "هل أنت متأكد من حذف هذا الطالب؟",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontFamily: 'Almarai',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF2E3542)
+              ),
+            ),
           ),
           actionsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE67E22), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _deleteStudent(studentId);
-                    },
-                    child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE67E22), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("إلغاء", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
-                  ),
-                ),
-              ],
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                  "تراجع",
+                  style: TextStyle(color: Colors.grey, fontFamily: 'Almarai', fontWeight: FontWeight.bold)
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteStudent(studentId);
+              },
+              child: const Text(
+                  "تأكيد الحذف",
+                  style: TextStyle(color: Colors.white, fontFamily: 'Almarai')
+              ),
             ),
           ],
         ),
