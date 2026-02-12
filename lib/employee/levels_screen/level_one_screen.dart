@@ -106,7 +106,7 @@ class _LevelOneScreenState extends State<LevelOneScreen> {
                         DataColumn(label: Expanded(child: Center(child: Text('المكان', style: TextStyle(fontWeight: FontWeight.bold))))),
                         DataColumn(label: Expanded(child: Center(child: Text('الطلاب', style: TextStyle(fontWeight: FontWeight.bold))))),
                         DataColumn(label: Expanded(child: Center(child: Text('المواعيد والوقت', style: TextStyle(fontWeight: FontWeight.bold))))),
-                        DataColumn(label: Expanded(child: Center(child: Text('الأكشن', style: TextStyle(fontWeight: FontWeight.bold))))),
+                        DataColumn(label: Expanded(child: Center(child: Text('الاجراءات', style: TextStyle(fontWeight: FontWeight.bold))))),
                       ],
                       rows: groups.map((group) {
                         List sessions = group['groupSessions'] ?? [];
