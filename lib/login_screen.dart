@@ -258,6 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _phoneController,
                     decoration: _buildInputDecoration("أدخل رقم الهاتف"),
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next, // بيخلي زرار الكيبورد يظهر "التالي"
                     validator: (value) => (value == null || value.isEmpty) ? "مطلوب" : null,
                   ),
                   SizedBox(height: 20),
@@ -265,6 +266,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _isObscured,
+                      textInputAction: TextInputAction.done, // بيخلي زرار الكيبورد يظهر "تم"
+                      onFieldSubmitted: (_) => _handleLogin(),
                     decoration: _buildInputDecoration("أدخل كلمة السر").copyWith(
                       suffixIcon: IconButton(
                         icon: Icon(_isObscured ? Icons.visibility_off : Icons.visibility, color: Color(0xFF9E9E9E)),
@@ -765,7 +768,17 @@ Widget _buildDropdownField(String label, List<String> items, {Function(String?)?
   );
 }
 
-Widget _buildInputField(String label, String hint, {bool isRequired = true, bool isPhone = false, bool isPassword = false, bool isObscured = false, VoidCallback? onToggle, TextEditingController? controller}) {
+Widget _buildInputField(
+    String label,
+    String hint, {
+      bool isRequired = true,
+      bool isPhone = false,
+      bool isPassword = false,
+      bool isObscured = false,
+      VoidCallback? onToggle,
+      TextEditingController? controller,
+      TextInputAction? textInputAction, // ضيفي ده
+    }) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -777,6 +790,7 @@ Widget _buildInputField(String label, String hint, {bool isRequired = true, bool
         controller: controller,
         obscureText: isPassword ? isObscured : false,
         keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
+        textInputAction: textInputAction ?? TextInputAction.next, // افتراضياً "التالي"
         validator: (value) {
           if (isRequired && (value == null || value.trim().isEmpty)) return "مطلوب";
           if (label == "البريد الإلكتروني" && value != null && value.isNotEmpty) {
