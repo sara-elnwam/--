@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'attendance_logs_tab.dart';
 import 'teacher_schedule_tab.dart';
+import 'edit_teacher_screen.dart';
 // توحيد الألوان مع تصميم الطالب
 const Color kPrimaryBlue = Color(0xFF07427C);
 const Color kTextDark = Color(0xFF2E3542);
@@ -104,10 +105,20 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> with SingleTick
             style: const TextStyle(color: kTextDark, fontSize: 17, fontWeight: FontWeight.bold, fontFamily: 'Almarai'),
           ),
           iconTheme: const IconThemeData(color: kTextDark),
+          // داخل AppBar في ملف staff_details_screen.dart
           actions: [
             IconButton(
               icon: const Icon(Icons.edit_note, color: Color(0xFF1976D2), size: 26),
-              onPressed: () {},
+              onPressed: () {
+                if (staffData != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditTeacherScreen(staffData: staffData!),
+                    ),
+                  ).then((_) => _fetchStaffInfo()); // تحديث البيانات بعد العودة من التعديل
+                }
+              },
             ),
             const SizedBox(width: 8),
           ],
