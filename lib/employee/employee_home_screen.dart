@@ -12,7 +12,9 @@ import 'reports_screen/reports_screen.dart'; // تأكد من اسم الملف
 import 'staff_management_screen/staff_management_screen.dart';
 import 'waiting_list_screen/waiting_list_screen.dart';
 import 'courses_screen/courses_screen.dart'; // تأكد من المسار الصحيح
-
+import 'branches_screen/branches_screen.dart'; // تأكد من المسار الصحيح
+// هذا هو المسار الصحيح بناءً على هيكلة المجلدات عندك
+import 'employee/employees_screen.dart';
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -105,10 +107,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             EmployeeAttendanceHistoryScreen(),   // 2
             StudentsScreen(),                    // 3
             AllEmployeesScreen(),                // 4
-            _buildPlaceholder("المعلمون"),        // 5
+            EmployeesScreen(),                   // 5 <--- تم الربط هنا (صفحة المعلمين)
             _buildPlaceholder("المستويات"),       // 6
-            _buildPlaceholder("الفروع"),          // 7
-            const CoursesScreen(),               // 8 <--- تم التعديل هنا بدلاً من Placeholder
+            const BranchesScreen(),              // 7
+            const CoursesScreen(),               // 8
             WaitingListScreen(),                 // 9
             StaffManagementScreen(),             // 10
             ReportsScreen(),                     // 11
