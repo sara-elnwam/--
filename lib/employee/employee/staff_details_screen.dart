@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'attendance_logs_tab.dart';
+import 'teacher_schedule_tab.dart';
 // توحيد الألوان مع تصميم الطالب
 const Color kPrimaryBlue = Color(0xFF07427C);
 const Color kTextDark = Color(0xFF2E3542);
@@ -128,12 +129,13 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> with SingleTick
             : errorMessage.isNotEmpty
             ? _buildErrorWidget()
             :// 2. في الـ TabBarView استبدلي السطر القديم بـ:
+        // ابحثي عن التبويب الثالث وغيريه ليكون هكذا:
         TabBarView(
           controller: _tabController,
           children: [
             _buildInfoTab(),
-            AttendanceLogsTab(empId: widget.staffId), // تأكدي أن staffId هنا قيمته 2 مثلاً وليس 0
-            const Center(child: Text("جدول الشيخ سيظهر هنا")),
+            AttendanceLogsTab(empId: widget.staffId),
+            TeacherScheduleTab(empId: widget.staffId), // استدعاء الجدول هنا
           ],
         ),
       ),
