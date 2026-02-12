@@ -12,8 +12,14 @@ class EmployeesScreen extends StatefulWidget {
 }
 
 class _EmployeesScreenState extends State<EmployeesScreen> {
-  List<StaffModel> _teachers = [];
+  List<StaffModel> _allEmployees = [];
+  List<StaffModel> _filteredEmployees = [];
   bool _isLoading = true;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  final Color kPrimaryBlue = const Color(0xFF07427C);
+  final Color kTextDark = const Color(0xFF2E3542);
 
   @override
   void initState() {
@@ -27,44 +33,50 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      // سنستخدم الرابط العام GetAll للتأكد من سحب الـ 26 موظف كاملين
-      // ثم سنقوم بفلترتهم داخل الكود لضمان عدم ضياع أي اسم
-      final url = Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetAll');
+      // الرابط المخصص للمعلمين
+      final url = Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetWithType/?type=1');
 
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      // طباعة للفحص: ستجدي هنا الـ 26 كاملين إن شاء الله
-      print("📥 اجمالي البيانات القادمة من السيرفر: ${response.body}");
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      });
 
       if (response.statusCode == 200) {
-        final List<dynamic> decodedResponse = json.decode(response.body);
+        final dynamic responseData = json.decode(response.body);
+        List<dynamic> dataList = [];
+
+        // التحقق مما إذا كانت البيانات بداخل 'data' أو هي القائمة مباشرة
+        if (responseData is Map && responseData.containsKey('data')) {
+          dataList = responseData['data'];
+        } else if (responseData is List) {
+          dataList = responseData;
+        }
+
+        List<StaffModel> loadedTeachers = [];
+        for (var item in dataList) {
+          loadedTeachers.add(StaffModel.fromJson(item));
+        }
 
         setState(() {
-          // نحول كل البيانات ونفلتر المعلمين والمعلمات فقط يدوياً لضمان الدقة
-          _teachers = decodedResponse
-              .map((json) => StaffModel.fromJson(json))
-              .where((emp) =>
-          emp.employeeType?.name == "معلم/معلمة" ||
-              emp.employeeType?.id == 1)
-              .toList();
-
+          _allEmployees = loadedTeachers;
+          _filteredEmployees = _allEmployees;
           _isLoading = false;
         });
-
-        print("✅ عدد المعلمين بعد الفلترة الداخلية: ${_teachers.length}");
       } else {
+        print("خطأ من السيرفر: ${response.statusCode}");
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      print("❌ خطأ: $e");
+      print("حدث خطأ: $e");
       setState(() => _isLoading = false);
     }
+  }
+  void _filterSearch(String query) {
+    setState(() {
+      _filteredEmployees = _allEmployees
+          .where((emp) => emp.name!.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
   }
 
   @override
@@ -72,74 +84,89 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text("بيانات المعلمين", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold)),
-        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,
+        // ابحث عن السطر ده وغير قيمته من true لـ false
+        centerTitle: false,
+        title: _isSearching
+            ? TextField(
+          controller: _searchController,
+          autofocus: true,
+          onChanged: _filterSearch,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(hintText: "ابحث عن معلم...", border: InputBorder.none, hintStyle: TextStyle(fontFamily: 'Almarai', fontSize: 14)),
+        )
+            : Text("اسماء  المعلمين", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: kTextDark, fontSize: 16)),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: kPrimaryBlue),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                  _filteredEmployees = _allEmployees;
+                }
+              });
+            },
+          ),
+        ],
       ),
-      // جسم الصفحة (بدون سكرول)
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _teachers.isEmpty
-          ? const Center(child: Text("لم يتم العثور على معلمين"))
+          ? Center(child: CircularProgressIndicator(color: kPrimaryBlue))
           : Padding(
-        padding: const EdgeInsets.all(5.0),
+        padding: const EdgeInsets.all(12),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
           ),
-          child: SingleChildScrollView( // سكرول رأسي فقط إذا زاد العدد عن الشاشة
-            child: Table(
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              columnWidths: const {
-                0: FixedColumnWidth(25),  // #
-                1: FlexColumnWidth(2.5),  // الإسم
-                2: FlexColumnWidth(1.8),  // الوظيفة
-                3: FixedColumnWidth(40),  // البيانات (العين)
-                4: FixedColumnWidth(40),  // كلمة المرور (القفل)
-                5: FixedColumnWidth(40),  // حذف (السلة)
-              },
-              children: [
-                // الهيدر المطلوب
-                TableRow(
-                  decoration: BoxDecoration(color: Colors.grey.shade100),
-                  children: [
-                    _buildHeader("#"),
-                    _buildHeader("الإسم"),
-                    _buildHeader("الوظيفة"),
-                    _buildHeader("البيانات"),
-                    _buildHeader("كلمة المرور"),
-                    _buildHeader("حذف"),
-                  ],
-                ),
-                // الصفوف
-                ..._teachers.asMap().entries.map((entry) {
-                  int index = entry.key;
-                  var teacher = entry.value;
-                  return TableRow(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SingleChildScrollView(
+              child: Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1), // رقم #
+                  1: FlexColumnWidth(4), // الاسم
+                  2: FlexColumnWidth(2), // بيانات
+                  3: FlexColumnWidth(2), // السر
+                  4: FlexColumnWidth(1.5), // حذف
+                },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey[100]),
                     children: [
-                      _buildCell("${index + 1}"),
-                      _buildCell(teacher.name ?? "", isBold: true),
-                      _buildCell(teacher.employeeType?.name ?? "معلم/ة"),
-                      // أيقونة البيانات
-                      _buildActionIcon(Icons.visibility_outlined, Colors.blue, () {
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (context) => StaffDetailsScreen(
-                            staffId: teacher.id ?? 0,
-                            staffName: teacher.name ?? "",
-                          ),
-                        ));
-                      }),
-                      // أيقونة كلمة المرور
-                      _buildActionIcon(Icons.lock_outline, Colors.orange, () {}),
-                      // أيقونة الحذف
-                      _buildActionIcon(Icons.delete_outline, Colors.red, () {}),
+                      _buildHeaderCell("#"),
+                      _buildHeaderCell("الاسم", align: TextAlign.right),
+                      _buildHeaderCell("بيانات"),
+                      _buildHeaderCell("السر"),
+                      _buildHeaderCell("حذف"),
                     ],
-                  );
-                }).toList(),
-              ],
+                  ),
+                  ..._filteredEmployees.asMap().entries.map((entry) {
+                    int index = entry.key;
+                    var teacher = entry.value;
+                    return TableRow(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
+                      ),
+                      children: [
+                        _buildDataCell("${index + 1}"),
+                        _buildDataCell(teacher.name ?? "---", align: TextAlign.right, isBold: true),
+                        _buildActionCell(Icons.person_outline, Colors.blue[800]!, () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (c) => StaffDetailsScreen(staffId: teacher.id!, staffName: teacher.name!),
+                          ));
+                        }),
+                        _buildActionCell(Icons.lock_open_rounded, Colors.blue[400]!, () {}),
+                        _buildActionCell(Icons.delete_outline, Colors.red[400]!, () {}),
+                      ],
+                    );
+                  }).toList(),
+                ],
+              ),
             ),
           ),
         ),
@@ -147,27 +174,21 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
-  Widget _buildHeader(String text) {
+  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+      child: Text(text, textAlign: align, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700], fontFamily: 'Almarai')),
     );
   }
 
-  Widget _buildCell(String text, {bool isBold = false}) {
+  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center, bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(text, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontFamily: 'Almarai')),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+      child: Text(text, textAlign: align, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: isBold ? FontWeight.w600 : FontWeight.normal, color: kTextDark, fontFamily: 'Almarai')),
     );
   }
 
-  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Icon(icon, color: color, size: 20),
-      ),
-    );
+  Widget _buildActionCell(IconData icon, Color color, VoidCallback onTap) {
+    return IconButton(icon: Icon(icon, color: color, size: 22), onPressed: onTap);
   }
 }
