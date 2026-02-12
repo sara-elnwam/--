@@ -142,8 +142,10 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent, // هذا السطر يمنع اللون الغريب ويجعلها بيضاء تماماً
         elevation: 0.5,
         centerTitle: false,
+        iconTheme: const IconThemeData(color: Color(0xFF2E3542)), // لتوحيد لون الأيقونات مع الطلاب
         title: _isSearching
             ? TextField(
           controller: _searchController,
@@ -151,15 +153,15 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           onChanged: _filterSearch,
           textAlign: TextAlign.right,
           decoration: const InputDecoration(
-              hintText: "ابحث عن معلم...",
+              hintText: "ابحث عن موظف...",
               border: InputBorder.none,
               hintStyle: TextStyle(fontFamily: 'Almarai', fontSize: 14)),
         )
-            : Text("اسماء المعلمين",
+            : Text("اسماء المعلمون",
             style: TextStyle(
                 fontFamily: 'Almarai',
                 fontWeight: FontWeight.bold,
-                color: kTextDark,
+                color: kTextDark, // تأكدي أن kTextDark هو Color(0xFF2E3542)
                 fontSize: 16)),
         actions: [
           IconButton(
@@ -205,7 +207,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                       _buildHeaderCell("#"),
                       _buildHeaderCell("الاسم", align: TextAlign.right),
                       _buildHeaderCell("بيانات"),
-                      _buildHeaderCell("السر"),
+                      _buildHeaderCell("كلمة المرور"),
                       _buildHeaderCell("حذف"),
                     ],
                   ),

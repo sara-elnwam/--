@@ -16,15 +16,15 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
 
-  final Color darkBlue = const Color(0xFF2E3542);
-  final Color kActiveBlue = const Color(0xFF1976D2);
+  // توحيد الألوان مع شاشة المعلمين
+  final Color kPrimaryBlue = const Color(0xFF07427C);
+  final Color kTextDark = const Color(0xFF2E3542);
 
   @override
   void initState() {
     super.initState();
     _fetchAllEmployees();
   }
-
 
   Future<void> _fetchAllEmployees() async {
     setState(() => _isLoading = true);
@@ -43,6 +43,15 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
     }
+  }
+
+  // خاصية البحث المضافة
+  void _filterSearch(String query) {
+    setState(() {
+      _filteredEmployees = _allEmployees
+          .where((emp) => (emp['name'] ?? "").toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
   }
 
   Future<void> _updatePassword(int empId, String newPassword) async {
@@ -88,6 +97,7 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     }
   }
 
+  // --- بوب آب تغيير كلمة المرور (بتصميم موحد) ---
   void _showResetPasswordDialog(int empId, String empName) {
     final TextEditingController _passController = TextEditingController();
     final TextEditingController _confirmPassController = TextEditingController();
@@ -109,12 +119,12 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("من فضلك، قم بإدخال كلمة المرور الجديدة للموظف: $empName",
+                  Text("إدخال كلمة المرور الجديدة للموظف: $empName",
                       style: const TextStyle(fontSize: 13, color: Colors.grey, fontFamily: 'Almarai')),
                   const SizedBox(height: 20),
                   _buildPopupTextField("كلمة المرور", _passController),
                   const SizedBox(height: 15),
-                  _buildPopupTextField("إعادة إدخال كلمة المرور", _confirmPassController),
+                  _buildPopupTextField("تأكيد كلمة المرور", _confirmPassController),
                 ],
               ),
             ),
@@ -125,7 +135,7 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E3542),
+                    backgroundColor: kPrimaryBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 onPressed: _isSubmitting ? null : () async {
                   if (_passController.text.length < 6) {
@@ -152,23 +162,31 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
     );
   }
 
+  // --- بوب آب الحذف (بتصميم موحد) ---
   void _showDeleteConfirmDialog(int empId) {
     showDialog(
       context: context,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          content: const Text("هل أنت متأكد من حذف هذا الموظف؟", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold)),
+          content: const Padding(
+            padding: EdgeInsets.only(top: 20),
+            child: Text("هل أنت متأكد من حذف هذا الموظف؟",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع", style: TextStyle(fontFamily: 'Almarai'))),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
               onPressed: () {
                 Navigator.pop(context);
                 _deleteEmployee(empId);
               },
-              child: const Text("تأكيد الحذف", style: TextStyle(color: Colors.white)),
+              child: const Text("تأكيد الحذف", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
             ),
           ],
         ),
@@ -178,93 +196,142 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
-          title: const Text("الموظفون", style: TextStyle(color: Color(0xFF2E3542), fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
-        ),
-        body: _isLoading
-            ? Center(child: CircularProgressIndicator(color: kActiveBlue))
-            : Column(
-          children: [
-            _buildTableHeader(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _filteredEmployees.length,
-                itemBuilder: (context, index) {
-                  final emp = _filteredEmployees[index];
-                  return _buildEmployeeRow(emp, index + 1);
+        elevation: 0.5,
+        centerTitle: false,
+        title: _isSearching
+            ? TextField(
+          controller: _searchController,
+          autofocus: true,
+          onChanged: _filterSearch,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(
+              hintText: "ابحث عن موظف...",
+              border: InputBorder.none,
+              hintStyle: TextStyle(fontFamily: 'Almarai', fontSize: 14)),
+        )
+            : Text("قائمة الموظفين",
+            style: TextStyle(
+                fontFamily: 'Almarai',
+                fontWeight: FontWeight.bold,
+                color: kTextDark,
+                fontSize: 16)),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search, color: kPrimaryBlue),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                  _filteredEmployees = _allEmployees;
+                }
+              });
+            },
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: kPrimaryBlue))
+          : Padding(
+        padding: const EdgeInsets.all(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SingleChildScrollView(
+              child: Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1), // رقم #
+                  1: FlexColumnWidth(4), // الاسم
+                  2: FlexColumnWidth(3.5), // الوظيفة
+                  3: FlexColumnWidth(3), // بيانات
+                  4: FlexColumnWidth(4), // السر
+                  5: FlexColumnWidth(3), // حذف
                 },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey[100]),
+                    children: [
+                      _buildHeaderCell("#"),
+                      _buildHeaderCell("الاسم", align: TextAlign.right),
+                      _buildHeaderCell("الوظيفة"),
+                      _buildHeaderCell("بيانات"),
+                      _buildHeaderCell("كلمة المرور"),
+                      _buildHeaderCell("حذف"),
+                    ],
+                  ),
+                  ..._filteredEmployees.asMap().entries.map((entry) {
+                    int index = entry.key;
+                    var emp = entry.value;
+                    return TableRow(
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
+                      ),
+                      children: [
+                        _buildDataCell("${index + 1}"),
+                        _buildDataCell(emp['name'] ?? "---", align: TextAlign.right, isBold: true),
+                        _buildDataCell(emp['employeeType']?['name'] ?? "---"),
+                        _buildActionCell(Icons.person_outline, Colors.blue[800]!, () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => EmployeeParentDetailsScreen(
+                                empId: emp['id'],
+                                empName: emp['name'] ?? "بيانات الموظف",
+                              ),
+                            ),
+                          );
+                          _fetchAllEmployees();
+                        }),
+                        _buildActionCell(Icons.lock_open_rounded, Colors.blue[400]!, () => _showResetPasswordDialog(emp['id'], emp['name'])),
+                        _buildActionCell(Icons.delete_outline, Colors.red[400]!, () => _showDeleteConfirmDialog(emp['id'])),
+                      ],
+                    );
+                  }).toList(),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTableHeader() {
-    return Container(
-      color: Colors.grey[50],
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      child: Row(
-        children: [
-          _cellText("#", 1, isHeader: true),
-          _cellText("الإسم", 4, isHeader: true),
-          _cellText("الوظيفة", 2, isHeader: true),
-          _cellText("البيانات", 2, isHeader: true),
-          _cellText("كلمة المرور", 2, isHeader: true),
-          _cellText("حذف", 1, isHeader: true),
-        ],
-      ),
+  // --- Widgets مساعدة موحدة التنسيق ---
+  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+      child: Text(text,
+          textAlign: align,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700], fontFamily: 'Almarai')),
     );
   }
 
-  Widget _buildEmployeeRow(dynamic emp, int index) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[200]!))),
-      child: Row(
-        children: [
-          _cellText(index.toString(), 1),
-          _cellText(emp['name'] ?? "---", 4, isBold: true),
-          _cellText(emp['employeeType']?['name'] ?? "---", 2),
-          _cellIcon(Icons.person, Colors.blue[900]!, 2, () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => EmployeeParentDetailsScreen(
-                  empId: emp['id'],
-                  empName: emp['name'] ?? "بيانات الموظف",
-                ),
-              ),
-            );
-            _fetchAllEmployees();
-          }),
-          _cellIcon(Icons.lock, Colors.blue, 2, () => _showResetPasswordDialog(emp['id'], emp['name'])),
-          _cellIcon(Icons.delete, Colors.redAccent, 1, () => _showDeleteConfirmDialog(emp['id'])),
-        ],
-      ),
+  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center, bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+      child: Text(text,
+          textAlign: align,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+              color: kTextDark,
+              fontFamily: 'Almarai')),
     );
   }
 
-  Widget _cellText(String text, int flex, {bool isHeader = false, bool isBold = false}) {
-    return Expanded(
-      flex: flex,
-      child: Text(text, textAlign: TextAlign.center, style: TextStyle(
-          color: isHeader ? Colors.grey[600] : darkBlue,
-          fontWeight: (isHeader || isBold) ? FontWeight.bold : FontWeight.normal,
-          fontSize: isHeader ? 12 : 13,
-          fontFamily: 'Almarai')),
-    );
-  }
-
-  Widget _cellIcon(IconData icon, Color color, int flex, VoidCallback onTap) {
-    return Expanded(flex: flex, child: InkWell(onTap: onTap, child: Icon(icon, color: color, size: 20)));
+  Widget _buildActionCell(IconData icon, Color color, VoidCallback onTap) {
+    return IconButton(icon: Icon(icon, color: color, size: 22), onPressed: onTap);
   }
 
   Widget _buildPopupTextField(String label, TextEditingController controller) {
@@ -281,6 +348,8 @@ class _AllEmployeesScreenState extends State<AllEmployeesScreen> {
   }
 
   void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Almarai')), backgroundColor: color));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Almarai')), backgroundColor: color),
+    );
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
 class EmployeeDetailsScreen extends StatefulWidget {
   final int empId;
   final String empName;

@@ -274,7 +274,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
             style: const TextStyle(color: Color(0xFF2E3542), fontSize: 16),
             onChanged: _filterStudents,
           )
-              : const Text("قائمة الطلاب",
+              : const Text("اسماء الطلاب",
               style: TextStyle(
                   color: Color(0xFF2E3542),
                   fontWeight: FontWeight.bold,
@@ -331,7 +331,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                         _buildHeaderCell("#"),
                         _buildHeaderCell("الاسم", align: TextAlign.right),
                         _buildHeaderCell("بيانات"),
-                        _buildHeaderCell("السر"),
+                        _buildHeaderCell("كلمة المرور"),
                         _buildHeaderCell("حذف"),
                       ],
                     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'employee_details_screen.dart';
 import 'edit_employee_screen.dart';
+import 'specific_employee_attendance_screen.dart'; // 1. تم إضافة الاستيراد هنا
 
 class EmployeeParentDetailsScreen extends StatefulWidget {
   final int empId;
@@ -69,16 +70,16 @@ class _EmployeeParentDetailsScreenState extends State<EmployeeParentDetailsScree
           ),
           body: TabBarView(
             children: [
+              // التابة الأولى: تفاصيل الموظف
               EmployeeDetailsScreen(
                 key: _detailsKey,
                 empId: widget.empId,
                 empName: widget.empName,
               ),
-              const Center(
-                child: Text(
-                  "شاشة الحضور والإنصراف",
-                  style: TextStyle(fontFamily: 'Almarai'),
-                ),
+              // 2. التابة الثانية: تم استبدال النص بالشاشة الفعلية هنا
+              SpecificEmployeeAttendanceScreen(
+                employeeId: widget.empId.toString(),
+                employeeName: widget.empName,
               ),
             ],
           ),
