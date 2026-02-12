@@ -15,6 +15,11 @@ import 'courses_screen/courses_screen.dart'; // تأكد من المسار ال�
 import 'branches_screen/branches_screen.dart'; // تأكد من المسار الصحيح
 // هذا هو المسار الصحيح بناءً على هيكلة المجلدات عندك
 import 'employee/employees_screen.dart';
+
+import 'levels_screen/levels_screen.dart';
+
+
+
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 const Color kActiveBlue = Color(0xFF1976D2);
@@ -108,7 +113,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             StudentsScreen(),                    // 3
             AllEmployeesScreen(),                // 4
             EmployeesScreen(),                   // 5 <--- تم الربط هنا (صفحة المعلمين)
-            _buildPlaceholder("المستويات"),       // 6
+            LevelsScreen(),                      // 6
             const BranchesScreen(),              // 7
             const CoursesScreen(),               // 8
             WaitingListScreen(),                 // 9
