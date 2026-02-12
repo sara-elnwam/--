@@ -244,12 +244,21 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String empId = prefs.getString('user_id') ?? "0";
 
+      // سحب الـ ID والتأكد إنه رقم
+      String? rawId = prefs.getString('user_id');
+      int empId = int.tryParse(rawId ?? "") ?? 0;
+
+      if (empId == 0) {
+        _showSnackBar("خطأ: كود المستخدم غير صالح", Colors.red);
+        return;
+      }
+
+      // تجهيز الـ Body حسب السويجر
       final Map<String, dynamic> attendanceData = {
-        "empId": int.parse(empId),
+        "empId": empId,
         "locationId": _selectedOffice?['id'],
-        "checkType": _checkType,
+        "checkType": _checkType, // السيرفر بيقبل "In" أو "Out"
         "date": DateTime.now().toIso8601String(),
         "lat": _myPosition?.latitude,
         "lng": _myPosition?.longitude,
@@ -261,22 +270,22 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         body: json.encode(attendanceData),
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _showSnackBar("تم تسجيل ${_checkType == "In" ? "الحضور" : "الانصراف"} بنجاح", Colors.green);
         setState(() {
           if (_checkType == "In") {
             _attendanceDone = true;
-            _checkType = "Out"; // قلب الحالة بعد النجاح
+            _checkType = "Out";
           } else {
             _attendanceDone = false;
-            _checkType = "In"; // قلب الحالة بعد النجاح
-            _selectedOffice = null;
-            _isInRange = false;
+            _checkType = "In";
           }
         });
-        _showSnackBar("تم تسجيل العملية بنجاح ✅", Colors.green);
+      } else {
+        _showSnackBar("فشل التسجيل: ${response.body}", Colors.red);
       }
     } catch (e) {
-      _showSnackBar("فشل الاتصال بالسيرفر", Colors.red);
+      _showSnackBar("حدث خطأ تقني: $e", Colors.red);
     } finally {
       setState(() => _isLoading = false);
     }
@@ -391,8 +400,8 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     bool canPress = _selectedOffice != null && _isInRange;
     // تخصيص الألوان والنصوص بناءً على الحالة
     String statusText = _checkType == "In" ? "اضغط لتسجيل الحضور" : "اضغط لتسجيل الانصراف";
-    Color activeColor = _checkType == "In" ? const Color(0xFF1A237E) : Colors.orange.shade800;
-
+// استخدمي اللون الأزرق مباشرة بدلاً من المتغير غير المعرف
+    Color activeColor = _checkType == "In" ? const Color(0xFF1976D2) : Colors.red;
     return Column(
       children: [
         GestureDetector(
