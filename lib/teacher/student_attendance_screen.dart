@@ -42,10 +42,9 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
 
   Future<void> _fetchAttendanceData() async {
     setState(() => _isLoading = true);
+
+    // الرابط الذي ذكره الليدر لجلب حالة الحضور الحالية
     String urlString = "https://nour-al-eman.runasp.net/api/Group/GetGroupAttendace?GroupId=${widget.groupId}";
-    for (var student in widget.students) {
-      urlString += "&ids=${student.id}";
-    }
 
     try {
       final response = await http.get(Uri.parse(urlString));
@@ -53,18 +52,18 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
         final decoded = json.decode(response.body);
         List fetchedData = decoded["data"] ?? [];
 
-        if (fetchedData.isNotEmpty) {
-          setState(() {
-            _attendanceList = fetchedData.map((item) => {
-              "stId": item["id"],
-              "name": item["name"] ?? "طالب",
-              "status": false,
-              "oldSave": null,
-              "newSave": null,
-              "note": "",
-            }).toList();
-          });
-        }
+        setState(() {
+          // هنا نقوم برسم القائمة بناءً على البيانات الفعلية من السيرفر
+          _attendanceList = fetchedData.map((item) => {
+            "stId": item["id"], // تأكدي من مسمى الحقل في الـ JSON
+            "name": item["name"] ?? "طالب",
+            // إذا كان الطالب مسجل في جدول الحضور لهذا اليوم يكون status = true
+            "status": item["isPresent"] ?? false,
+            "oldSave": item["oldSave"],
+            "newSave": item["newSave"],
+            "note": item["note"] ?? "",
+          }).toList();
+        });
       }
     } catch (e) {
       debugPrint("Fetch Error: $e");
@@ -75,24 +74,22 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // شيلنا الـ Scaffold والـ AppBar خالص عشان السهمين واللون يختفوا
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-
-        ),
-        backgroundColor: Colors.white,
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF07427C)))
-            : Stack( // استخدام Stack لتمكين رفع الزر فوق القائمة
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF07427C)))
+          : Container(
+        color: Colors.white, // بنوحد اللون عشان ميبقاش فيه لون غريب
+        child: Stack(
           children: [
             Column(
               children: [
-                const SizedBox(height: 10),
-                _buildHeader(),
+                // شلنا الـ Header القديم لو كان عامل زحمة
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 160), // مساحة إضافية للسماح بالاسكرول خلف الزر
+                    // الـ padding هنا صفر عشان ميسيبش مسافة بينه وبين اللي فوقه
+                    padding: const EdgeInsets.only(top: 0, bottom: 160),
                     itemCount: _attendanceList.length,
                     itemBuilder: (context, index) => _buildRow(index),
                   ),
@@ -100,7 +97,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
               ],
             ),
             Positioned(
-              bottom: 90, // رفع الزر بمقدار 90 كما طلبت
+              bottom: 100, // ظبطنا مكان الزرار تحت خالص
               left: 0,
               right: 0,
               child: Center(child: _buildSaveButton()),
@@ -110,7 +107,6 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       ),
     );
   }
-
   Widget _buildHeader() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -158,12 +154,14 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
             const VerticalDivider(width: 1),
             Expanded(
               flex: 2, // زيادة المساحة لتناسب كلمة "تعليق"
-              child: IconButton(
-                icon: Icon(
-                    Icons.comment_bank_outlined,
-                    color: _attendanceList[index]["note"].isEmpty ? Colors.grey : const Color(0xFF07427C)
+              child:// داخل الـ Row في ListView
+              IconButton(
+                icon: Icon(Icons.comment,
+                    color: _attendanceList[index]["status"] ? Color(0xFF07427C) : Colors.grey // تغيير اللون لو مش حاضر
                 ),
-                onPressed: () => _showNoteDialog(index),
+                onPressed: _attendanceList[index]["status"]
+                    ? () => _showNoteDialog(index) // لو حاضر يفتح الدايلوج
+                    : null, // لو مش حاضر الزرار ميعملش حاجة
               ),
             ),
           ],
@@ -176,12 +174,15 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     return Expanded(
       flex: 2,
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          hint: const Center(child: Text("اختر", style: TextStyle(fontSize: 10))),
-          value: _attendanceList[index][key],
-          items: _ratingOptions.map((v) => DropdownMenuItem(value: v, child: Center(child: Text(v, style: const TextStyle(fontSize: 11))))).toList(),
-          onChanged: (val) => setState(() => _attendanceList[index][key] = val),
+        child:// مثال لدروب داون "الجديد"
+        DropdownButton<String>(
+          value: _attendanceList[index]["newSave"],
+          hint: Text("اختر"),
+          // الشرط السحري هنا
+          onChanged: _attendanceList[index]["status"]
+              ? (val) => setState(() => _attendanceList[index]["newSave"] = val)
+              : null, // null هنا بتخلي الـ Dropdown معطل (Disabled)
+          items: _ratingOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
         ),
       ),
     );
@@ -193,15 +194,16 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       height: 45,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey.shade200, // لون رمادي فاتح
+            backgroundColor: const Color(0xFF07427C), // اللون الأزرق المعتمد
             elevation: 3,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))
+            // التعديل هنا: خليت الـ borderRadius قليل جداً (5) عشان يبان مربع
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5))
         ),
         onPressed: _attendanceList.isEmpty ? null : _saveData,
         child: const Text(
             "حفظ التعديلات",
             style: TextStyle(
-                color: Color(0xFF81D4FA), // لون سماوي فاتح
+                color: Colors.white, // أبيض عشان يليق مع الأزرق الغامق
                 fontWeight: FontWeight.bold,
                 fontSize: 16
             )
@@ -211,39 +213,157 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   }
 
   Future<void> _saveData() async {
-    // منطق الحفظ هنا
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري حفظ البيانات...")));
+    setState(() => _isLoading = true);
+
+    // تجهيز البيانات بالظبط زي ما السويجر طالب
+    final List<Map<String, dynamic>> dataToSend = _attendanceList.map((s) {
+      return {
+        "id": 0, // كما هو موجود في السويجر
+        "studentId": s["stId"], // معرف الطالب
+        "groupId": widget.groupId, // معرف المجموعة
+        "isPresent": s["status"], // هنا "صح" يعني true (حضور) و "بدون صح" يعني false (غياب)
+        "points": int.tryParse(s["points"]?.toString() ?? "0") ?? 0, // تحويل النقاط لرقم
+        "note": s["note"] ?? "", // التعليق
+        "newAttendanceNote": _getRatingIndex(s["newSave"]), // تحويل التقييم (ممتاز، جيد..) لرقم
+        "oldAttendanceNote": _getRatingIndex(s["oldSave"]),
+        "createDate": DateTime.now().toIso8601String(), // تاريخ اليوم
+        "createBy": "Teacher", // أو مسمى المعلم لو متاح
+        "createFrom": "Mobile",
+      };
+    }).toList();
+
+    try {
+      final response = await http.post(
+        Uri.parse("https://nour-al-eman.runasp.net/api/StudentAttendance/submit"),
+        headers: {
+          "accept": "*/*",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(dataToSend),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("✅ تم الحفظ بنجاح"), backgroundColor: Colors.green)
+        );
+      } else {
+        print("Error: ${response.body}"); // عشان لو فيه خطأ نعرفه من الكونسول
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("❌ خطأ من السيرفر: ${response.statusCode}"))
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("❌ فشل الاتصال بالسيرفر"))
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
+// دالة مساعدة لتحويل التقييم من نص لرقم عشان السيرفر يقبله
+  int _getRatingIndex(String? rating) {
+    if (rating == null) return 0;
+    // الترتيب حسب الـ List اللي عندك: ["ممتاز", "جيد جدا", "جيد", "مقبول", "ضعيف"]
+    List<String> ratings = ["ممتاز", "جيد جدا", "جيد", "مقبول", "ضعيف"];
+    int index = ratings.indexOf(rating);
+    return index != -1 ? (index + 1) : 0; // بيرجع 1 للممتاز، 2 لجيد جدا وهكذا
+  }
   void _showNoteDialog(int index) {
-    TextEditingController c = TextEditingController(text: _attendanceList[index]["note"]);
+    TextEditingController noteController = TextEditingController(text: _attendanceList[index]["note"]);
+    // لو فيه متغير للنقاط في الـ list استخدميه، هنا هعمل له Controller
+    TextEditingController pointsController = TextEditingController(text: _attendanceList[index]["points"]?.toString() ?? "");
+
     showDialog(
       context: context,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text("تعليق المعلم"),
-          content: TextField(
-              controller: c,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                  hintText: "اكتب ملاحظاتك هنا...",
-                  border: OutlineInputBorder()
-              )
+          backgroundColor: Colors.white, // الخلفية بيضاء
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Center(
+            child: Text(
+              "إضافة تقييم وتعليق",
+              style: TextStyle(color: Color(0xFF07427C), fontWeight: FontWeight.bold),
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // الكارت الأول: التعليق
+                Card(
+                  color: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("التعليق", style: TextStyle(color: Color(0xFF07427C), fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        TextField(
+                          controller: noteController,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            hintText: "اكتب هنا...",
+                            hintStyle: TextStyle(fontSize: 12),
+                            border: InputBorder.none, // عشان شكل الكارت يبقى أنظف
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // الكارت الثاني: النقاط
+                Card(
+                  color: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("النقاط", style: TextStyle(color: Color(0xFF07427C), fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        TextField(
+                          controller: pointsController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            hintText: "ادخل نقاط الطالب هنا",
+                            hintStyle: TextStyle(fontSize: 12),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("إلغاء", style: TextStyle(color: Colors.grey))
+              onPressed: () => Navigator.pop(context),
+              child: const Text("إلغاء", style: TextStyle(color: Colors.red)),
             ),
             ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF07427C)),
-                onPressed: () {
-                  setState(() => _attendanceList[index]["note"] = c.text);
-                  Navigator.pop(context);
-                },
-                child: const Text("حفظ التعليق", style: TextStyle(color: Colors.white))
-            )
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF07427C),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                setState(() {
+                  _attendanceList[index]["note"] = noteController.text;
+                  _attendanceList[index]["points"] = pointsController.text; // حفظ النقاط
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("حفظ", style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
       ),
