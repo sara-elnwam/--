@@ -130,9 +130,9 @@ class _EmployeeAttendanceHistoryScreenState extends State<EmployeeAttendanceHist
         appBar: AppBar(
           title: const Text("  ",
               style: TextStyle(fontWeight: FontWeight.bold,
-                  fontFamily: 'Almarai',
-                  fontSize: 16,
-                 )),
+                fontFamily: 'Almarai',
+                fontSize: 16,
+              )),
           centerTitle: true,
           backgroundColor: Colors.white,
           elevation: 0.5,

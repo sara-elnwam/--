@@ -76,13 +76,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     }
   }
 
-  // دالة لتغيير القسم المعروض عند الضغط على عنصر في السايدبار
   void _onItemTapped(String title, int index) {
     setState(() {
       _currentIndex = index;
       _currentTitle = title;
     });
-    Navigator.pop(context); // إغلاق القائمة الجانبية بعد الاختيار
+
+    // إذا كان المستخدم يفتح شاشة السجل (رقم 2)، اطلب تحديث البيانات
+    // ملاحظة: ستحتاج لاستخدام GlobalKey أو ChangeNotifier لإخبار شاشة السجل بالتحديث
+    Navigator.pop(context);
   }
 
   @override

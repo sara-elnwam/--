@@ -8,11 +8,16 @@ import 'package:intl/intl.dart' as intl;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
-class MainAttendanceScreen extends StatefulWidget {
+// تعريف الألوان الخاصة بنظام الموظف لضمان التناسق
+final Color darkBlue = Color(0xFF2E3542);
+const Color kActiveBlue = Color(0xFF1976D2);
+const Color kLabelGrey = Color(0xFF718096);
+const Color kBorderColor = Color(0xFFE2E8F0);
+
+class MainAttendanceScreen extends StatefulWidget { // <--- تغيير الاسم هنا
   @override
   _MainAttendanceScreenState createState() => _MainAttendanceScreenState();
 }
-
 class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   final LocalAuthentication auth = LocalAuthentication();
 
@@ -54,7 +59,6 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     if (mounted) setState(() => _currentTime = formattedTime);
   }
 
-  // خوارزمية التحقق من وجود النقطة داخل المضلع (Polygon)
   bool _isPointInPolygon(Position userPos, List<Map<String, double>> polygonCoords) {
     if (polygonCoords.isEmpty) return false;
     int i, j = polygonCoords.length - 1;
@@ -79,37 +83,27 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
 
   Future<void> _fetchOffices() async {
     try {
-      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Locations/GetAllLocations'));
+      // الرابط الصحيح كما في صورة الـ Swagger
+      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Locations/Getall'));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
-          List<dynamic> serverData = data['data'] ?? [];
-          if (serverData.isNotEmpty) {
-            _apiOffices = serverData;
-          } else {
-            _apiOffices = _getBackupOffices();
-          }
+          // نأخذ القائمة من السيرفر.
+          // إذا كان السيرفر يرسلها داخل 'data' نأخذها، وإلا نأخذ الاستجابة مباشرة.
+          _apiOffices = data['data'] ?? data;
         });
+
+        if (_apiOffices.isEmpty) {
+          _showSnackBar("قائمة المكاتب فارغة في السيرفر", Colors.orange);
+        }
       } else {
-        setState(() => _apiOffices = _getBackupOffices());
+        _showSnackBar("خطأ في جلب البيانات: ${response.statusCode}", Colors.red);
       }
     } catch (e) {
       print("Network Error: $e");
-      setState(() => _apiOffices = _getBackupOffices());
+      _showSnackBar("تعذر الاتصال بالسيرفر، تأكد من الإنترنت", Colors.red);
     }
-  }
-
-  List<Map<String, dynamic>> _getBackupOffices() {
-    return [
-      {"id": 2, "name": "مدرسة نور الإيمان", "coordinates": "31.178793, 31.223888"},
-      {"id": 3, "name": "rouby's location", "coordinates": "30.381908;30.354219;30.384365;30.352138;30.382301;30.349434;30.380126;30.351612"},
-      {"id": 4, "name": "مسجد الشيخ ابراهيم", "coordinates": "31.178793, 31.223888"},
-      {"id": 5, "name": "مسجد العساسي", "coordinates": "31.178793, 31.223888"},
-      {"id": 6, "name": "مسجد الهدى والنور", "coordinates": "31.178793, 31.223888"},
-      {"id": 7, "name": "مضيفة نافع", "coordinates": "31.178793, 31.223888"},
-      {"id": 8, "name": "مكتب الموقف", "coordinates": "31.178793, 31.223888"},
-    ];
   }
 
   Future<void> _checkCurrentStatus() async {
@@ -170,23 +164,21 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       return;
     }
 
+    // تنظيف النص القادم من السيرفر وتحويله لنقاط
     String rawCoords = office['coordinates'] ?? "";
+
+    // استبدال الفواصل بـ ; لتوحيد الشكل وتقسيمها
     rawCoords = rawCoords.replaceAll(',', ';');
-    List<String> parts = rawCoords.split(';');
+    List<String> parts = rawCoords.split(';').where((s) => s.trim().isNotEmpty).toList();
 
     List<Map<String, double>> polygonPoints = [];
 
     for (int i = 0; i < parts.length; i += 2) {
       if (i + 1 < parts.length) {
-        String latStr = parts[i].trim();
-        String lngStr = parts[i + 1].trim();
-
-        if (latStr != "null" && lngStr != "null") {
-          double? lat = double.tryParse(latStr);
-          double? lng = double.tryParse(lngStr);
-          if (lat != null && lng != null && lat != 0.0) {
-            polygonPoints.add({'lat': lat, 'lng': lng});
-          }
+        double? lat = double.tryParse(parts[i].trim());
+        double? lng = double.tryParse(parts[i+1].trim());
+        if (lat != null && lng != null) {
+          polygonPoints.add({'lat': lat, 'lng': lng});
         }
       }
     }
@@ -196,26 +188,27 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       _selectedLocationName = office['name'];
 
       if (polygonPoints.length >= 3) {
+        // إذا كانت 3 نقاط أو أكثر نتعامل كمضلع (Polygon)
         _isInRange = _isPointInPolygon(_myPosition!, polygonPoints);
       }
       else if (polygonPoints.isNotEmpty) {
+        // إذا كانت نقطة واحدة (أو نقطتين) نتعامل كدائرة قطرها 500 متر حول أول نقطة
         double dist = Geolocator.distanceBetween(
             _myPosition!.latitude, _myPosition!.longitude,
             polygonPoints[0]['lat']!, polygonPoints[0]['lng']!
         );
-        _isInRange = dist <= 500;
+        _isInRange = dist <= 500; // يمكنك تغيير المسافة من هنا
       } else {
         _isInRange = false;
       }
     });
 
     if (!_isInRange) {
-      _showSnackBar("أنت خارج النطاق الجغرافي لـ ${_selectedLocationName}", Colors.red);
+      _showSnackBar("أنت خارج النطاق لـ ${_selectedLocationName}", Colors.red);
     } else {
-      _showSnackBar("أنت الآن داخل نطاق ${_selectedLocationName} ", Colors.green);
+      _showSnackBar("أنت داخل نطاق ${_selectedLocationName}", Colors.green);
     }
   }
-
   Future<void> _startBiometricAuth() async {
     if (!_isInRange) {
       _showSnackBar("لا يمكنك البصم لأنك خارج النطاق", Colors.red);
@@ -244,28 +237,27 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      // سحب الـ ID والتأكد إنه رقم
       String? rawId = prefs.getString('user_id');
-      int empId = int.tryParse(rawId ?? "") ?? 0;
 
-      if (empId == 0) {
+      if (rawId == null || rawId == "0") {
         _showSnackBar("خطأ: كود المستخدم غير صالح", Colors.red);
         return;
       }
 
-      // تجهيز الـ Body حسب السويجر
+      // تجهيز البيانات بالصيغة التي طلبها السيرفر في آخر Error Log
       final Map<String, dynamic> attendanceData = {
-        "empId": empId,
-        "locationId": _selectedOffice?['id'],
-        "checkType": _checkType, // السيرفر بيقبل "In" أو "Out"
-        "date": DateTime.now().toIso8601String(),
-        "lat": _myPosition?.latitude,
-        "lng": _myPosition?.longitude,
+        "UserId": rawId.toString(), // إرسال المعرف كنص "5"
+        "userLocation": _selectedOffice?['id'], // إرسال المعرف كرقم (int)
+        "CheckType": _checkType,
+        "HisCoordinate": { // إرسال الإحداثيات كـ Object وليس String
+          "lat": _myPosition?.latitude,
+          "lng": _myPosition?.longitude,
+        },
+        "Date": DateTime.now().toIso8601String(),
       };
 
       final response = await http.post(
-        Uri.parse('https://nour-al-eman.runasp.net/api/Locations/AddAttendance'),
+        Uri.parse('https://nour-al-eman.runasp.net/api/Locations/employee-attendance'),
         headers: {"Content-Type": "application/json"},
         body: json.encode(attendanceData),
       );
@@ -282,7 +274,9 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
           }
         });
       } else {
-        _showSnackBar("فشل التسجيل: ${response.body}", Colors.red);
+        // لعرض السبب في حالة وجود خطأ آخر
+        print("Response: ${response.body}");
+        _showSnackBar("فشل التسجيل: تأكد من البيانات", Colors.red);
       }
     } catch (e) {
       _showSnackBar("حدث خطأ تقني: $e", Colors.red);
@@ -290,10 +284,9 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       setState(() => _isLoading = false);
     }
   }
-
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+      content: Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')),
       backgroundColor: color,
       duration: const Duration(seconds: 2),
       behavior: SnackBarBehavior.floating,
@@ -302,51 +295,54 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-          title: const Text(" ", style: TextStyle(color: Color(0xFF1A237E), fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true
-      ),
-      body: _isLoadingStatus
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-        onRefresh: () async {
-          await _initLocation();
-          await _fetchOffices();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-                  border: Border.all(color: Colors.grey.shade100),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+            title: Text("  ", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            centerTitle: true
+        ),
+        body: _isLoadingStatus
+            ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
+            : RefreshIndicator(
+          onRefresh: () async {
+            await _initLocation();
+            await _fetchOffices();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    border: Border.all(color: kBorderColor),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildMiniRow(Icons.location_on, _currentLocationText),
+                      const Divider(height: 25, color: kBorderColor),
+                      _buildMiniRow(Icons.access_time_filled, "ساعات العمل: 00:00 ص - 00:00 م"),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    _buildMiniRow(Icons.location_on, _currentLocationText),
-                    const Divider(height: 25),
-                    _buildMiniRow(Icons.access_time_filled, "ساعات العمل: 00:00 ص - 00:00 م"),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              _buildModernDropdown(),
-              const SizedBox(height: 40),
-              Text(_currentTime, style: const TextStyle(fontSize: 45, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
-              const SizedBox(height: 50),
-              _buildFingerprintButton(),
-              const SizedBox(height: 20),
-              if (_isLoading) const Padding(padding: EdgeInsets.only(top: 15), child: CircularProgressIndicator())
-            ],
+                const SizedBox(height: 20),
+                _buildModernDropdown(),
+                const SizedBox(height: 40),
+                Text(_currentTime, style: TextStyle(fontSize: 50, fontWeight: FontWeight.bold, color: darkBlue, fontFamily: 'Almarai')),
+                const SizedBox(height: 40),
+                _buildFingerprintButton(),
+                const SizedBox(height: 20),
+                if (_isLoading) const Padding(padding: EdgeInsets.only(top: 15), child: CircularProgressIndicator(color: kActiveBlue))
+              ],
+            ),
           ),
         ),
       ),
@@ -356,9 +352,9 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
   Widget _buildMiniRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF1A237E), size: 22),
+        Icon(icon, color: kActiveBlue, size: 22),
         const SizedBox(width: 12),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87))),
+        Expanded(child: Text(text, style: TextStyle(fontSize: 14, color: darkBlue, fontFamily: 'Almarai'))),
       ],
     );
   }
@@ -367,23 +363,23 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(" اختيار المكتب /الموقع", style: TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.bold)),
+        const Text(" اختيار المكتب /الموقع", style: TextStyle(fontSize: 13, color: kLabelGrey, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _selectedOffice != null ? const Color(0xFF1A237E) : Colors.grey[300]!),
+            border: Border.all(color: _selectedOffice != null ? kActiveBlue : kBorderColor),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<Map<String, dynamic>>(
               isExpanded: true,
               value: _selectedOffice,
-              hint: const Text("اختر مكان تواجدك الحالي"),
+              hint: const Text("اختر مكان تواجدك الحالي", style: TextStyle(fontFamily: 'Almarai')),
               items: _apiOffices.map((office) {
                 return DropdownMenuItem<Map<String, dynamic>>(
                   value: office,
-                  child: Text(office['name'] ?? ""),
+                  child: Text(office['name'] ?? "", style: const TextStyle(fontFamily: 'Almarai')),
                 );
               }).toList(),
               onChanged: (val) {
@@ -398,10 +394,10 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
 
   Widget _buildFingerprintButton() {
     bool canPress = _selectedOffice != null && _isInRange;
-    // تخصيص الألوان والنصوص بناءً على الحالة
     String statusText = _checkType == "In" ? "اضغط لتسجيل الحضور" : "اضغط لتسجيل الانصراف";
-// استخدمي اللون الأزرق مباشرة بدلاً من المتغير غير المعرف
-    Color activeColor = _checkType == "In" ? const Color(0xFF1976D2) : Colors.red;
+// ابحثي عن هذا السطر في _buildFingerprintButton
+    // استبدلي السطر القديم بهذا السطر
+    Color activeColor = _checkType == "In" ? kActiveBlue : Colors.red;
     return Column(
       children: [
         GestureDetector(
