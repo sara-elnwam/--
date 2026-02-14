@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+// استيراد صفحة تفاصيل الطالب اللي بعتيها
+import 'student_details_screen.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final int groupId;
@@ -43,10 +45,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      // الرابط الصحيح لجلب تفاصيل المجموعة بناءً على الصورة المرفقة
+      // استخدام الإندبوينت الصحيحة بناءً على الـ GroupId والـ LevelId
       final url = Uri.parse(
-          'https://nour-al-eman.runasp.net/api/Group/GetGroupDetails?GroupId=${widget.groupId}&LevelId=${widget.levelId}'
-      );
+          'https://nour-al-eman.runasp.net/api/Group/GetGroupDetails?GroupId=${widget.groupId}&LevelId=${widget.levelId}');
 
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
@@ -64,10 +65,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           });
         }
       } else {
-        throw "خطأ في السيرفر: ${response.statusCode}";
+        throw "Error: ${response.statusCode}";
       }
     } catch (e) {
-      debugPrint("❌ Error Detail: $e");
+      debugPrint("❌ Error fetching group details: $e");
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -87,10 +88,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           backgroundColor: Colors.white,
           elevation: 0.5,
           title: Text("طلاب مجموعة: ${widget.groupName}",
-              style: const TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, fontSize: 16)),
+              style: const TextStyle(
+                  fontFamily: 'Almarai',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16)),
           iconTheme: IconThemeData(color: kTextDark),
         ),
-
         floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,
@@ -105,42 +108,51 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 heroTag: "add_student_btn",
                 onPressed: () {},
                 backgroundColor: orangeButton,
-                child: const Icon(Icons.person_add, color: Colors.white, size: 28)),
+                child: const Icon(Icons.person_add,
+                    color: Colors.white, size: 28)),
           ],
         ),
-
         body: _isLoading
             ? Center(child: CircularProgressIndicator(color: kPrimaryBlue))
             : Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // كارت اسم الشيخ - يعرض الآن الاسم الممرر من الصفحة السابقة
+              // كارت اسم الشيخ
               Container(
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                     color: kPrimaryBlue.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kPrimaryBlue.withOpacity(0.1))
-                ),
+                    border:
+                    Border.all(color: kPrimaryBlue.withOpacity(0.1))),
                 child: Row(
                   children: [
                     Icon(Icons.person, color: kPrimaryBlue),
                     const SizedBox(width: 10),
-                    Text("الشيخ: ", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: kPrimaryBlue)),
-                    Text(widget.teacherName, style: TextStyle(fontFamily: 'Almarai', color: kTextDark)),
+                    Text("الشيخ: ",
+                        style: TextStyle(
+                            fontFamily: 'Almarai',
+                            fontWeight: FontWeight.bold,
+                            color: kPrimaryBlue)),
+                    Text(widget.teacherName,
+                        style: TextStyle(
+                            fontFamily: 'Almarai', color: kTextDark)),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
               // جدول الطلاب
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10)
+                    ],
                   ),
                   child: _students.isEmpty
                       ? const Center(child: Text("المجموعة فارغة"))
@@ -151,18 +163,20 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         columnWidths: const {
                           0: FlexColumnWidth(1),
                           1: FlexColumnWidth(4),
-                          2: FlexColumnWidth(3),
-                          3: FlexColumnWidth(2),
-                          4: FlexColumnWidth(2),
+                          2: FlexColumnWidth(1.5),
+                          3: FlexColumnWidth(1.5),
+                          4: FlexColumnWidth(1.5),
                         },
                         children: [
                           TableRow(
-                            decoration: BoxDecoration(color: Colors.grey[100]),
+                            decoration: BoxDecoration(
+                                color: Colors.grey[100]),
                             children: [
                               _buildHeaderCell("#"),
-                              _buildHeaderCell("الاسم", align: TextAlign.right),
+                              _buildHeaderCell("الاسم",
+                                  align: TextAlign.right),
                               _buildHeaderCell("بيانات"),
-                              _buildHeaderCell("كلمة المرور"),
+                              _buildHeaderCell("سر"),
                               _buildHeaderCell("حذف"),
                             ],
                           ),
@@ -172,10 +186,35 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                             return TableRow(
                               children: [
                                 _buildDataCell("${index + 1}"),
-                                _buildDataCell(student['name'] ?? "بدون اسم", align: TextAlign.right),
-                                _buildActionIcon(Icons.person_outline, Colors.blue),
-                                _buildActionIcon(Icons.lock_open, Colors.orange),
-                                _buildActionIcon(Icons.delete_outline, Colors.red),
+                                _buildDataCell(
+                                    student['name'] ?? "بدون اسم",
+                                    align: TextAlign.right),
+
+                                // زر البيانات: يفتح صفحة تفاصيل الطالب بالملي
+                                _buildActionIcon(
+                                    Icons.person_outline,
+                                    Colors.blue, () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          StudentDetailsScreen(
+                                            studentId: student['id'],
+                                            studentName:
+                                            student['name'] ?? "",
+                                          ),
+                                    ),
+                                  );
+                                }),
+
+                                // زر كلمة السر (يمكن برمجته لاحقاً)
+                                _buildActionIcon(Icons.lock_open,
+                                    Colors.orange, () {}),
+
+                                // زر الحذف (يمكن برمجته لاحقاً)
+                                _buildActionIcon(
+                                    Icons.delete_outline,
+                                    Colors.red, () {}),
                               ],
                             );
                           }).toList(),
@@ -192,18 +231,29 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Text(text, textAlign: align, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Almarai')),
-  );
+  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) =>
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(text,
+            textAlign: align,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                fontFamily: 'Almarai')),
+      );
 
-  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center}) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Text(text, textAlign: align, style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')),
-  );
+  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center}) =>
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(text,
+            textAlign: align,
+            style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')),
+      );
 
-  Widget _buildActionIcon(IconData icon, Color color) => IconButton(
-    icon: Icon(icon, color: color, size: 20),
-    onPressed: () {},
-  );
+  // تحديث دالة الأيقونة لتستقبل وظيفة الضغط (onTap)
+  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) =>
+      IconButton(
+        icon: Icon(icon, color: color, size: 20),
+        onPressed: onTap,
+      );
 }
