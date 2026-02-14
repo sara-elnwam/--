@@ -74,21 +74,22 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // شيلنا الـ Scaffold والـ AppBar خالص عشان السهمين واللون يختفوا
     return Directionality(
       textDirection: TextDirection.rtl,
       child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF07427C)))
           : Container(
-        color: Colors.white, // بنوحد اللون عشان ميبقاش فيه لون غريب
+        color: Colors.white,
         child: Stack(
           children: [
             Column(
               children: [
-                // شلنا الـ Header القديم لو كان عامل زحمة
+                // إضافة الهيدر هنا ليظهر فوق الجدول مباشرة
+                const SizedBox(height: 10), // مسافة بسيطة من الأعلى
+                _buildHeader(),
+
                 Expanded(
                   child: ListView.builder(
-                    // الـ padding هنا صفر عشان ميسيبش مسافة بينه وبين اللي فوقه
                     padding: const EdgeInsets.only(top: 0, bottom: 160),
                     itemCount: _attendanceList.length,
                     itemBuilder: (context, index) => _buildRow(index),
@@ -97,7 +98,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
               ],
             ),
             Positioned(
-              bottom: 100, // ظبطنا مكان الزرار تحت خالص
+              bottom: 100,
               left: 0,
               right: 0,
               child: Center(child: _buildSaveButton()),
@@ -107,20 +108,29 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       ),
     );
   }
+
+  // دالة الهيدر مع التأكد من مسميات العناوين المطلوبة
   Widget _buildHeader() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF07427C),
-        borderRadius: const BorderRadius.only(topLeft: Radius.circular(5), topRight: Radius.circular(5)),
+        borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(5),
+            topRight: Radius.circular(5)
+        ),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
         children: const [
           Expanded(flex: 3, child: Center(child: Text("اسم الطالب", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
-          Expanded(flex: 1, child: Center(child: Text("حضور", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+          VerticalDivider(width: 1, color: Colors.white), // فاصل أبيض بسيط
+          Expanded(flex: 1, child: Center(child: Text("الحضور", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+          VerticalDivider(width: 1, color: Colors.white),
           Expanded(flex: 2, child: Center(child: Text("حفظ قديم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+          VerticalDivider(width: 1, color: Colors.white),
           Expanded(flex: 2, child: Center(child: Text("حفظ جديد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)))),
+          VerticalDivider(width: 1, color: Colors.white),
           Expanded(flex: 2, child: Center(child: Text("تعليق المعلم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)))),
         ],
       ),
