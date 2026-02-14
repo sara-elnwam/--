@@ -266,8 +266,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _isObscured,
-                      textInputAction: TextInputAction.done, // بيخلي زرار الكيبورد يظهر "تم"
-                      onFieldSubmitted: (_) => _handleLogin(),
+                    textInputAction: TextInputAction.done, // بيخلي زرار الكيبورد يظهر "تم"
+                    onFieldSubmitted: (_) => _handleLogin(),
                     decoration: _buildInputDecoration("أدخل كلمة السر").copyWith(
                       suffixIcon: IconButton(
                         icon: Icon(_isObscured ? Icons.visibility_off : Icons.visibility, color: Color(0xFF9E9E9E)),
