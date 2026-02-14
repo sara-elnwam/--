@@ -1,8 +1,31 @@
 import 'package:flutter/material.dart';
-import 'level_one_screen.dart'; // تأكدي أن المسار صحيح
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'level_one_screen.dart';
 
 class LevelsScreen extends StatelessWidget {
   const LevelsScreen({super.key});
+
+  // دالة جلب المستويات من الـ API
+  Future<List<dynamic>> fetchLevels() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://nour-al-eman.runasp.net/api/Level/Getall'),
+      );
+
+      if (response.statusCode == 200) {
+        final decodedData = jsonDecode(response.body);
+        if (decodedData['data'] is List) {
+          return decodedData['data'];
+        }
+        return [];
+      } else {
+        throw 'خطأ في السيرفر: ${response.statusCode}';
+      }
+    } catch (e) {
+      throw 'فشل الاتصال بالإنترنت: $e';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,18 +33,13 @@ class LevelsScreen extends StatelessWidget {
     const Color darkBlue = Color(0xFF2E3542);
     const Color orangeButton = Color(0xFFC66422);
 
-    final List<Map<String, dynamic>> levels = [
-      {"id": 1, "name": "المستوى الأول"},
-      {"id": 2, "name": "المستوى الثاني"},
-      {"id": 3, "name": "المستوى الثالث"},
-      {"id": 4, "name": "المستوى الرابع"},
-    ];
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       floatingActionButton: FloatingActionButton(
         heroTag: "fab_levels_main_unique",
-        onPressed: () {},
+        onPressed: () {
+          // هنا يمكنك إضافة كود لفتح نافذة إضافة مستوى جديد
+        },
         backgroundColor: orangeButton,
         child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
@@ -40,15 +58,33 @@ class LevelsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: ListView.builder(
-                itemCount: levels.length,
-                itemBuilder: (context, index) {
-                  return _buildLevelCard(
-                      context,
-                      levels[index]["name"],
-                      kActiveBlue,
-                      darkBlue,
-                      levels[index]["id"]
+              child: FutureBuilder<List<dynamic>>(
+                future: fetchLevels(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: orangeButton));
+                  } else if (snapshot.hasError) {
+                    return Center(
+                      child: Text("حدث خطأ: ${snapshot.error}",
+                          style: const TextStyle(fontFamily: 'Almarai')),
+                    );
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text("لا توجد مستويات مضافة بعد"));
+                  }
+
+                  final levels = snapshot.data!;
+
+                  return ListView.builder(
+                    itemCount: levels.length,
+                    itemBuilder: (context, index) {
+                      return _buildLevelCard(
+                          context,
+                          levels[index]["name"] ?? "مستوى غير مسمى",
+                          kActiveBlue,
+                          darkBlue,
+                          levels[index]["id"]
+                      );
+                    },
                   );
                 },
               ),
@@ -70,7 +106,7 @@ class LevelsScreen extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(15),
         onTap: () {
-          // هنا بنبعت الـ id والـ name للشاشة التانية عشان تفتح صح
+          // الانتقال لشاشة المجموعات مع تمرير الـ ID الديناميكي من الـ API
           Navigator.push(
             context,
             MaterialPageRoute(
