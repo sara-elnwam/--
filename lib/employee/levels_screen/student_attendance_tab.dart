@@ -32,8 +32,8 @@ class _StudentAttendanceTabState extends State<StudentAttendanceTab> {
       case 1: return "ممتاز";
       case 2: return "جيد جداً";
       case 3: return "جيد";
-      case 5: return "--"; // موجود في الرسبونس بتاعك رقم 5
-      default: return "مقبول";
+      case 5: return "ضعيف"; // موجود في الرسبونس بتاعك رقم 5
+      default: return "غير محدد";
     }
   }
 

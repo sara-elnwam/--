@@ -274,7 +274,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
             style: const TextStyle(color: Color(0xFF2E3542), fontSize: 16),
             onChanged: _filterStudents,
           )
-              : const Text("قائمة الطلاباسماء الطلاب",
+              : const Text("قائمة الطلاب",
               style: TextStyle(
                   color: Color(0xFF2E3542),
                   fontWeight: FontWeight.bold,
