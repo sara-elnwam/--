@@ -31,8 +31,9 @@ class TeacherData {
   factory TeacherData.fromJson(Map<String, dynamic> json) {
     return TeacherData(
       id: json["id"],
+      // التعديل هنا: إذا كان التاريخ نل أو تاريخ افتراضي غير صحيح (0001)، يرجع تاريخ اليوم
       joinDate: (json["joinDate"] == null || json["joinDate"] == "0001-01-01T00:00:00")
-          ? null
+          ? DateTime.now()
           : DateTime.parse(json["joinDate"]),
       loc: json["loc"] == null ? null : Loc.fromJson(json["loc"]),
       name: json["name"],

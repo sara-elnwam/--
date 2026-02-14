@@ -174,9 +174,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _infoRow("اسم المعلم :", teacherData?.name ?? "---"),
           _infoRow("كود المعلم :", teacherData?.id?.toString() ?? "---"),
           _infoRow("المكتب التابع له :", teacherData?.loc?.name ?? "---"),
-          _infoRow("تاريخ الالتحاق", (teacherData?.joinDate != null && teacherData!.joinDate!.year > 1)
-              ? "${teacherData!.joinDate!.day.toString().padLeft(2, '0')}-${teacherData!.joinDate!.month.toString().padLeft(2, '0')}-${teacherData!.joinDate!.year}"
-              : "--"),
+          _infoRow("تاريخ الالتحاق",
+              "${teacherData!.joinDate!.day.toString().padLeft(2, '0')}-${teacherData!.joinDate!.month.toString().padLeft(2, '0')}-${teacherData!.joinDate!.year}"
+          ),
           _infoRow("المؤهل الدراسي :", teacherData?.educationDegree ?? "---"),
         ]),
         const SizedBox(height: 16),
