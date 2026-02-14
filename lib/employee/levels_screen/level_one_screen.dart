@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'group_details_screen.dart';
+
 
 class LevelOneScreen extends StatefulWidget {
   final int levelId;
@@ -323,16 +325,52 @@ class _LevelOneScreenState extends State<LevelOneScreen> {
                         DataColumn(label: Text('المواعيد', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('إجراءات', style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
-                      // ابحث عن هذا السطر داخل الـ rows وقم بتعديله
+                      // --- الجزء المعدل يبدأ من هنا ---
                       rows: snapshot.data!.map((group) {
                         // السيرفر يرسل المواعيد في حقل sessions حسب الصورة الأخيرة
                         List sessions = group['sessions'] ?? group['groupSessions'] ?? [];
 
                         return DataRow(cells: [
-                          DataCell(Text(group['name'] ?? "", style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))),
+                          // 1. خلية اسم المجموعة (قابلة للضغط)
+                          DataCell(
+                            InkWell(
+                              // داخل DataCell في LevelOneScreen
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => GroupDetailsScreen(
+                                      groupId: group['id'],
+                                      levelId: widget.levelId,
+                                      groupName: group['name'],
+                                      // نأخذ اسم الشيخ مباشرة من الـ Object الخاص بالمجموعة
+                                      teacherName: group['emp']?['name'] ?? "غير محدد",
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Text(
+                                  group['name'] ?? "---",
+                                  style: TextStyle(
+                                    color: kPrimaryBlue, // اللون الأزرق المعتمد في التصميم
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline, // خط تحت الكلمة لتبدو كلينك
+                                    fontFamily: 'Almarai',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // 2. خلية اسم الشيخ
                           DataCell(Text(group['emp']?['name'] ?? "---")),
+                          // 3. خلية المكان
                           DataCell(Text(group['loc']?['name'] ?? "---")),
+                          // 4. خلية عدد الطلاب
                           DataCell(Center(child: Text(group['studentCount']?.toString() ?? "0"))),
+                          // 5. خلية المواعيد
                           DataCell(
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -348,12 +386,14 @@ class _LevelOneScreenState extends State<LevelOneScreen> {
                                 ),
                               )
                           ),
+                          // 6. خلية الحذف
                           DataCell(IconButton(
                               icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
                               onPressed: () => _showDeleteDialog(group['id'], group['name'])
                           )),
                         ]);
                       }).toList(),
+                      // --- نهاية الجزء المعدل ---
                     ),
                   ),
                 ),
