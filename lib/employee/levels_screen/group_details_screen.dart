@@ -512,7 +512,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           backgroundColor: Colors.white,
           title: Text("طلاب مجموعة: ${widget.groupName}", style: const TextStyle(fontFamily: 'Almarai', fontSize: 16)),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -566,9 +566,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         columnWidths: const {
                           0: FlexColumnWidth(1),
                           1: FlexColumnWidth(4),
-                          2: FlexColumnWidth(1.5),
-                          3: FlexColumnWidth(1.5),
-                          4: FlexColumnWidth(1.5),
+                          2: FlexColumnWidth(2),
+                          3: FlexColumnWidth(2),
+                          4: FlexColumnWidth(2),
                         },
                         children: [
                           TableRow(
@@ -577,7 +577,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               _buildHeaderCell("#"),
                               _buildHeaderCell("الاسم", align: TextAlign.right),
                               _buildHeaderCell("بيانات"),
-                              _buildHeaderCell("سر"),
+                              _buildHeaderCell("كلمة المرور"),
                               _buildHeaderCell("حذف"),
                             ],
                           ),
