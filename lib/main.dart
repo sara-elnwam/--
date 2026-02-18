@@ -99,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         final int userType = int.tryParse(responseData['userType']?.toString() ?? "0") ?? 0;
 
         Widget nextScreen;
-        if (userType == 1) {
+        if (userType == 1 || userType == 4) {
           nextScreen = TeacherHomeScreen();
         } else if (userType == 2 || userType == 3) {
           nextScreen = EmployeeHomeScreen();

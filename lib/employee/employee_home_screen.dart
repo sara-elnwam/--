@@ -48,34 +48,38 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id');
+      String? numericId = prefs.getString('user_id');
 
-      if (id == null || id.isEmpty) {
+      debugPrint("📌 user_id = $numericId");
+
+      if (numericId == null || numericId.isEmpty) {
         setState(() => _isLoading = false);
         return;
       }
 
-      final response = await http.get(
-        Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'),
+      final profileResponse = await http.get(
+        Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$numericId'),
       );
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> decodedData = jsonDecode(response.body);
+      debugPrint("📥 Status: ${profileResponse.statusCode}");
+      debugPrint("📥 Body: ${profileResponse.body}");
+
+      if (profileResponse.statusCode == 200) {
+        final Map<String, dynamic> decodedData = jsonDecode(profileResponse.body);
         final employeeModel = EmployeeModel.fromJson(decodedData);
-        setState(() {
-          _rawResponse = decodedData['data'];
-          employeeData = employeeModel.data;
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _rawResponse = decodedData['data'];
+            employeeData = employeeModel.data;
+          });
+        }
       }
     } catch (e) {
-      debugPrint("Error fetching employee data: $e");
-      setState(() => _isLoading = false);
+      debugPrint("❌ Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-
   void _onItemTapped(String title, int index) {
     setState(() {
       _currentIndex = index;

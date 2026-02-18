@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'student/student_home_screen.dart';
 import 'teacher/teacher_home_screen.dart';
 import 'employee/employee_home_screen.dart';
-
+import 'account_selection_dialog.dart'; // ← المسار حسب مشروعك
 final Color primaryOrange = Color(0xFFC66422);
 final Color darkBlue = Color(0xFF2E3542);
 final Color greyText = Color(0xFF707070);
@@ -31,11 +31,14 @@ void main() async {
       final Map<String, dynamic> responseData = jsonDecode(loginDataString);
       final int userType = int.tryParse(responseData['userType']?.toString() ?? "0") ?? 0;
 
-      if (userType == 2) {
+      if (userType == 1 || userType == 4) {
+        // معلم/معلمة
         initialScreen = TeacherHomeScreen();
-      } else if (userType == 1 || userType == 3) {
+      } else if (userType == 2 || userType == 3) {
+        // إدارة أو محاسب
         initialScreen = EmployeeHomeScreen();
       } else {
+        // طالب أو غير معروف
         initialScreen = StudentHomeScreen(loginData: responseData);
       }
     } catch (e) {
@@ -126,7 +129,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
 
-
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -148,62 +150,65 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (response.statusCode == 200) {
           final dynamic decodedBody = jsonDecode(response.body);
-          Map<String, dynamic> userData;
 
-          // التعامل مع حالة إذا كان السيرفر يرسل قائمة أو كائن واحد
           if (decodedBody is List) {
-            if (decodedBody.isNotEmpty) {
-              userData = Map<String, dynamic>.from(decodedBody[0]);
-            } else {
+            if (decodedBody.isEmpty) {
               _showErrorSnackBar("لا يوجد مستخدم مسجل بهذا الرقم");
+              setState(() => _isLoading = false);
               return;
             }
+
+            // دالة مساعدة للتعامل مع الأكونت المختار
+            Future<void> handleSelectedAccount(Map<String, dynamic> selected) async {
+              final int selUserType = int.tryParse(selected['userType']?.toString() ?? "0") ?? 0;
+              final String selUserId = selected['id']?.toString() ?? "";
+
+              // الطالب (userType=0) → دخول مباشر بدون GetAll
+              if (selUserType == 0) {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('user_id', "");
+                await prefs.setString('user_guid', selUserId);
+                await prefs.setString('user_phone', phone);
+                await prefs.setString('loginData', jsonEncode(selected));
+                await prefs.setBool('is_logged_in', true);
+                if (mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => StudentHomeScreen(loginData: selected)),
+                  );
+                }
+              } else {
+                // موظف/معلم → محتاج numeric ID من GetAll
+                await _loginWithSelectedAccount(
+                  phone: phone,
+                  password: password,
+                  userId: selUserId,
+                  userType: selUserType,
+                );
+              }
+            }
+
+            if (decodedBody.length == 1) {
+              await handleSelectedAccount(Map<String, dynamic>.from(decodedBody[0]));
+            } else {
+              // أكتر من أكونت → عرض الداياليوق
+              setState(() => _isLoading = false);
+              if (!mounted) return;
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => AccountSelectionDialog(
+                  accounts: decodedBody,
+                  onSelect: (selected) async {
+                    Navigator.pop(context);
+                    setState(() => _isLoading = true);
+                    await handleSelectedAccount(Map<String, dynamic>.from(selected));
+                  },
+                ),
+              );
+            }
           } else {
-            userData = Map<String, dynamic>.from(decodedBody);
-          }
-
-          final prefs = await SharedPreferences.getInstance();
-
-
-          String idToSave = "";
-          if (userData['userId'] != null && userData['userId'].toString().isNotEmpty) {
-            idToSave = userData['userId'].toString();
-          } else if (userData['id'] != null && userData['id'].toString().isNotEmpty) {
-            idToSave = userData['id'].toString();
-          } else {
-            idToSave = userData['user_Id']?.toString() ?? "";
-          }
-
-          // طباعة للتأكد في الـ Console أثناء التشغيل
-          debugPrint("DEBUG: ID being saved is: $idToSave");
-
-          await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
-          await prefs.setString('user_id', idToSave);
-          await prefs.setString('loginData', jsonEncode(userData));
-          await prefs.setBool('is_logged_in', true);
-
-          int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
-
-          Widget nextScreen;
-          if (userType == 1) {
-            nextScreen = TeacherHomeScreen();
-          } else if (userType == 2 || userType == 3) {
-            nextScreen = EmployeeHomeScreen();
-          } else {
-            nextScreen = StudentHomeScreen(loginData: userData);
-          }
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai')),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => nextScreen),
-            );
+            // رسبونس object مباشر (فيه token و userId) → دخول مباشر
+            await _loginWithAccount(Map<String, dynamic>.from(decodedBody));
           }
         } else {
           _showErrorSnackBar("رقم الهاتف أو كلمة المرور غير صحيحة");
@@ -217,6 +222,173 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // بتجيب الـ numeric ID من GetAll عن طريق مطابقة الـ phone + userType
+  Future<void> _loginWithSelectedAccount({
+    required String phone,
+    required String password,
+    required String userId,   // GUID من الـ list
+    required int userType,    // userType من الـ list
+  }) async {
+    try {
+      // لو طالب (userType=0) مش محتاجين GetAll - بندخل مباشرة
+      if (userType == 0) {
+        debugPrint("👨‍🎓 طالب - دخول مباشر بدون GetAll");
+        final prefs = await SharedPreferences.getInstance();
+        final loginDataToSave = <String, dynamic>{
+          'userId': "",
+          'user_Id': userId,
+          'phoneNumber': phone,
+          'userType': userType,
+        };
+        await prefs.setString('user_id', "");
+        await prefs.setString('user_guid', userId);
+        await prefs.setString('user_phone', phone);
+        await prefs.setString('user_token', "");
+        await prefs.setString('loginData', jsonEncode(loginDataToSave));
+        await prefs.setBool('is_logged_in', true);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai')),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => StudentHomeScreen(loginData: loginDataToSave)),
+          );
+        }
+        return;
+      }
+
+      debugPrint("🔍 جاري البحث عن numeric ID من Employee/Getall...");
+
+      // الخطوة 1: جيب كل الموظفين/المعلمين
+      final allResponse = await http.get(
+        Uri.parse('$baseUrl/Employee/Getall'),
+      );
+
+      if (allResponse.statusCode != 200) {
+        _showErrorSnackBar("حدث خطأ في الاتصال بالسيرفر");
+        return;
+      }
+
+      final allData = jsonDecode(allResponse.body);
+      final List employees = allData['data'] ?? [];
+
+      // الخطوة 2: لاقي الموظف اللي phone وemployeeTypeId بتاعه مطابقين
+      Map<String, dynamic>? matched;
+      try {
+        matched = Map<String, dynamic>.from(employees.firstWhere(
+              (e) => e['phone']?.toString() == phone &&
+              e['employeeTypeId']?.toString() == userType.toString(),
+        ));
+      } catch (_) {
+        try {
+          matched = Map<String, dynamic>.from(employees.firstWhere(
+                (e) => e['phone']?.toString() == phone,
+          ));
+        } catch (_) {
+          matched = null;
+        }
+      }
+
+      if (matched == null) {
+        debugPrint("❌ مش لاقي الموظف في GetAll");
+        _showErrorSnackBar("حدث خطأ في تسجيل الدخول");
+        return;
+      }
+
+      final numericId = matched['id']?.toString() ?? "";
+      debugPrint("✅ لقيت numeric ID: $numericId");
+
+      // الخطوة 3: احفظ البيانات
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_id', numericId);
+      await prefs.setString('user_guid', userId);
+      await prefs.setString('user_phone', phone);
+      await prefs.setString('user_token', "");
+
+      final loginDataToSave = <String, dynamic>{
+        'userId': numericId,
+        'user_Id': userId,
+        'phoneNumber': phone,
+        'userType': userType,
+        ...matched,
+      };
+      await prefs.setString('loginData', jsonEncode(loginDataToSave));
+      await prefs.setBool('is_logged_in', true);
+
+      debugPrint("✅ Saved user_id: $numericId | guid: $userId");
+
+      // الخطوة 4: انتقل للشاشة المناسبة
+      Widget nextScreen;
+      if (userType == 1 || userType == 4) {
+        nextScreen = TeacherHomeScreen();
+      } else if (userType == 2 || userType == 3) {
+        nextScreen = EmployeeHomeScreen();
+      } else {
+        nextScreen = StudentHomeScreen(loginData: loginDataToSave);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai')),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => nextScreen),
+        );
+      }
+    } catch (e) {
+      debugPrint("ERROR in _loginWithSelectedAccount: $e");
+      _showErrorSnackBar("حدث خطأ في الاتصال بالسيرفر");
+    }
+  }
+
+  // دالة الحفظ والانتقال - بتشتغل بس لما الداتا فيها token و userId صح
+  Future<void> _loginWithAccount(Map<String, dynamic> userData) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    String numericId = userData['userId']?.toString() ?? "";
+    String guid = userData['user_Id']?.toString() ??
+        userData['id']?.toString() ?? "";
+    String phone = userData['phoneNumber']?.toString() ?? "";
+
+    await prefs.setString('user_id', numericId);
+    await prefs.setString('user_guid', guid);
+    await prefs.setString('user_phone', phone);
+    await prefs.setString('user_token', userData['token']?.toString() ?? "no_token");
+    await prefs.setString('loginData', jsonEncode(userData));
+    await prefs.setBool('is_logged_in', true);
+
+    debugPrint("✅ Saved user_id: $numericId | guid: $guid");
+
+    int userType = int.tryParse(userData['userType']?.toString() ?? "0") ?? 0;
+
+    Widget nextScreen;
+    if (userType == 1 || userType == 4) {
+      nextScreen = TeacherHomeScreen();
+    } else if (userType == 2 || userType == 3) {
+      nextScreen = EmployeeHomeScreen();
+    } else {
+      nextScreen = StudentHomeScreen(loginData: userData);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("تم تسجيل الدخول بنجاح", style: TextStyle(fontFamily: 'Almarai')),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => nextScreen),
+      );
+    }
+  }
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -357,8 +529,6 @@ class _UserTypeScreenState extends State<UserTypeScreen> {
               _buildTypeCard('طالب', 'للتسجيل في الدورات ومتابعة الدروس', Icons.school_rounded, 'student'),
               SizedBox(height: 20),
               _buildTypeCard('موظف', 'لإدارة النظام والمحتوى التعليمي', Icons.work_rounded, 'employee'),
-
-              // تم حذف زر "التالي" من هنا تماماً
             ],
           ),
         ),
@@ -393,7 +563,6 @@ class _UserTypeScreenState extends State<UserTypeScreen> {
     );
   }
 }
-
 
 
 

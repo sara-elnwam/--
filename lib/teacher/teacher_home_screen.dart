@@ -58,6 +58,8 @@ class GroupSession {
 }
 
 class TeacherHomeScreen extends StatefulWidget {
+  final Map<String, dynamic>? loginData; // ← أضف ده
+  TeacherHomeScreen({this.loginData});
   @override
   _TeacherHomeScreenState createState() => _TeacherHomeScreenState();
 }
@@ -74,34 +76,59 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     super.initState();
     _loadInitialData();
   }
-
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
-
-    if (_currentTitle == "البيانات الشخصية") {
-      await _fetchTeacherProfile();
-    } else if (_currentTitle == "مواعيد الدرس") {
+    await _fetchTeacherProfile(); // دايماً جيبي البروفايل في البداية
+    if (_currentTitle == "مواعيد الدرس") {
       await _fetchSessions();
-    } else {
-      // الصفحات التي لا تحتاج جلب بيانات فورية من السيرفر في هذه المرحلة
-      await Future.delayed(Duration(milliseconds: 300));
-      setState(() => _isLoading = false);
     }
+    if (mounted) setState(() => _isLoading = false);
   }
-
   Future<void> _fetchTeacherProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? id = prefs.getString('user_id');
-      if (id == null) return;
-      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$id'));
-      if (response.statusCode == 200) {
-        setState(() => teacherData = TeacherModel.fromJson(jsonDecode(response.body)).data);
-      }
-    } catch (e) { debugPrint(e.toString()); }
-    setState(() => _isLoading = false);
-  }
+      final loginDataStr = prefs.getString('loginData');
+      if (loginDataStr == null) return;
 
+      final loginData = jsonDecode(loginDataStr);
+
+      String? numericId = loginData['userId']?.toString();
+      String? guid = loginData['user_Id']?.toString() ?? loginData['id']?.toString();
+
+      debugPrint("🔑 numericId=$numericId | guid=$guid");
+
+      // لو عندنا numeric id استخدمه
+      if (numericId != null && numericId.isNotEmpty && numericId != "null" && numericId != "0") {
+        final response = await http.get(
+            Uri.parse('https://nour-al-eman.runasp.net/api/Employee/GetById?id=$numericId')
+        );
+        debugPrint("📥 Status: ${response.statusCode} | Body: ${response.body}");
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (mounted) setState(() => teacherData = TeacherModel.fromJson(decoded).data);
+        }
+      }
+      // لو مفيش numeric id، استخدم بيانات الـ loginData مباشرة
+      else if (guid != null && guid.isNotEmpty) {
+        debugPrint("⚠️ No numeric ID, using loginData directly");
+        if (mounted) {
+          setState(() {
+            teacherData = TeacherData(
+              id: null,
+              name: loginData['userName']?.toString(),
+              phone: loginData['phoneNumber']?.toString(),
+              joinDate: null,
+              educationDegree: null,
+              loc: null,
+              courses: null,
+            );
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Error: $e");
+    }
+  }
   Future<void> _fetchSessions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -164,8 +191,37 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     }
   }
 
-  // --- واجهة البيانات الشخصية ---
   Widget _buildProfileBody() {
+    if (teacherData == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 12),
+            const Text("تعذر تحميل البيانات", style: TextStyle(fontFamily: 'Almarai', color: Colors.red, fontSize: 16)),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text("إعادة المحاولة", style: TextStyle(fontFamily: 'Almarai')),
+              onPressed: () async {
+                setState(() => _isLoading = true);
+                await _fetchTeacherProfile();
+                if (mounted) setState(() => _isLoading = false);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // تاريخ الالتحاق بأمان
+    String joinDateStr = "---";
+    if (teacherData!.joinDate != null) {
+      final d = teacherData!.joinDate!;
+      joinDateStr = "${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}";
+    }
+
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -174,22 +230,21 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _infoRow("اسم المعلم :", teacherData?.name ?? "---"),
           _infoRow("كود المعلم :", teacherData?.id?.toString() ?? "---"),
           _infoRow("المكتب التابع له :", teacherData?.loc?.name ?? "---"),
-          _infoRow("تاريخ الالتحاق",
-              "${teacherData!.joinDate!.day.toString().padLeft(2, '0')}-${teacherData!.joinDate!.month.toString().padLeft(2, '0')}-${teacherData!.joinDate!.year}"
-          ),
+          _infoRow("تاريخ الالتحاق :", joinDateStr),
           _infoRow("المؤهل الدراسي :", teacherData?.educationDegree ?? "---"),
         ]),
         const SizedBox(height: 16),
         _buildInfoCard("الدورات التدريبية", Icons.school_outlined, [
           if (teacherData?.courses == null || teacherData!.courses!.isEmpty)
-            const Center(child: Text("لا توجد دورات", style: TextStyle(color: Colors.red, fontFamily: 'Almarai')))
+            const Center(
+              child: Text("لا توجد دورات", style: TextStyle(color: Colors.red, fontFamily: 'Almarai')),
+            )
           else
             ...teacherData!.courses!.map((c) => _infoRow("اسم الدورة :", c.toString())).toList(),
         ]),
       ],
     );
   }
-
   // --- واجهة مواعيد الدرس ---
   Widget _buildSessionsBody() {
     return ListView(
@@ -303,8 +358,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       ),
     );
   }
-
-  Widget _buildSidebarItem(IconData icon, String title, {Color? color, bool isLogout = false, bool isPushScreen = false, Widget? screen}) {
+  Widget _buildSidebarItem(IconData icon, String title,
+      {Color? color, bool isLogout = false, bool isPushScreen = false, Widget? screen}) {
     bool isSelected = _currentTitle == title;
 
     return ListTile(
@@ -320,25 +375,38 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           fontFamily: 'Almarai',
         ),
       ),
-      onTap: () {
+      onTap: () async {
         Navigator.pop(context); // إغلاق السايدبار فوراً
 
         if (isLogout) {
           _showLogoutDialog();
         } else if (isPushScreen && screen != null) {
-          // الانتقال لشاشة جديدة بالكامل
           Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
         } else {
-          // تغيير المحتوى الداخلي للصفحة الرئيسية
+          // لو نفس الصفحة الحالية، متعملش حاجة
+          if (_currentTitle == title) return;
+
           setState(() {
             _currentTitle = title;
           });
-          _loadInitialData();
+
+          // لو مواعيد الدرس بس جيب بياناتها
+          if (title == "مواعيد الدرس") {
+            setState(() => _isLoading = true);
+            await _fetchSessions();
+            if (mounted) setState(() => _isLoading = false);
+          }
+
+          // لو البيانات الشخصية وما في بيانات محملة، جيبها
+          if (title == "البيانات الشخصية" && teacherData == null) {
+            setState(() => _isLoading = true);
+            await _fetchTeacherProfile();
+            if (mounted) setState(() => _isLoading = false);
+          }
         }
       },
     );
   }
-
   void _showLogoutDialog() {
     showDialog(
       context: context,

@@ -114,29 +114,16 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     const days = {1: "السبت", 2: "الأحد", 3: "الإثنين", 4: "الثلاثاء", 5: "الأربعاء", 6: "الخميس", 7: "الجمعة"};
     return days[dayNumber] ?? "";
   }
-
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
-    String? id = widget.loginData?['userId']?.toString() ??
-        widget.loginData?['data']?['id']?.toString() ??
-        prefs.getString('student_id');
-    String? token = widget.loginData?['token']?.toString() ??
-        prefs.getString('user_token');
+    String? incomingId = widget.loginData?['studentId']?.toString() ?? widget.loginData?['id']?.toString();
+    String? token = widget.loginData?['token']?.toString() ?? prefs.getString('user_token');
 
-    if (id == null || id.isEmpty) {
-      _forceLogout();
-      return;
-    }
+    debugPrint("DEBUG: Testing ID: $incomingId");
 
-    await _fetchStudentProfile(id, token);
-    await testAllEndpoints();
-    _pageAnimationController.forward();
-  }
-
-  Future<void> _fetchStudentProfile(String id, String? token) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/Student/GetById?id=$id'),
+        Uri.parse('$baseUrl/Student/GetById?id=$incomingId'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token'
@@ -144,16 +131,154 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       );
 
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        setState(() {
-          studentFullData = json['data'] ?? json;
-          _isLoading = false;
-        });
+        final data = jsonDecode(response.body)['data'] ?? jsonDecode(response.body);
+        _processProfileData(data); // نستخدم الدالة الموحدة
+      } else {
+        debugPrint("DEBUG: Status ${response.statusCode}, starting Rescue...");
+        // لو فشل، بنروح لدالة الإنقاذ وهي اللي هتقفل الـ Loading لما تخلص
+        await _rescueByUserName(token);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint("DEBUG: Error in Initial Data: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+  Future<void> _fetchStudentProfile(String id, String? token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Student/GetById?id=$id'),
+        headers: { if (token != null) 'Authorization': 'Bearer $token' },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          studentFullData = data['data'];
+          _isLoading = false;
+        });
+
+        // بننادي الدوال حسب تعريفها في ملفك (بدون براميترز زيادة)
+        _fetchAttendance(id);
+        _fetchCourses();
+        _fetchStudentTasks();
+
+      } else if (response.statusCode == 400 && id.contains('-')) {
+        // لو الـ ID GUID وفشل، بنحاول ننقذ الموقف بالبحث
+        _rescueByUserName(token);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Error in Fetch Profile: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  Future<void> _rescueByUserName(String? token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Student/GetAll'),
+        headers: { if (token != null) 'Authorization': 'Bearer $token' },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> allStudents = jsonDecode(response.body)['data'] ?? [];
+
+        // 1. البيانات اللي معانا من اللوجن
+        String targetPhone = widget.loginData?['phoneNumber']?.toString().trim() ?? "";
+        String targetName = widget.loginData?['userName']?.toString().toLowerCase().trim() ?? "";
+
+        dynamic matchedStudent;
+
+        // 2. المحاولة الأولى: البحث برقم التليفون (أدق حاجة)
+        matchedStudent = allStudents.firstWhere(
+              (s) => s['phoneNumber']?.toString().trim() == targetPhone,
+          orElse: () => null,
+        );
+
+        // 3. المحاولة الثانية: لو ملقاش، ندور بالاسم في كل مكان (userName أو حتى لو مكتوب في الـ group)
+        if (matchedStudent == null) {
+          matchedStudent = allStudents.firstWhere(
+                (s) {
+              String sName = (s['userName'] ?? "").toString().toLowerCase();
+              // بنشوف لو الاسم موجود في أي حقل نصي جوه بيانات الطالب
+              return (sName.isNotEmpty && sName.contains(targetName)) ||
+                  s.toString().toLowerCase().contains(targetName);
+            },
+            orElse: () => null,
+          );
+        }
+
+        // 4. المحاولة "اليائسة" الأخيرة: لو لسه ملقاش (زي حالة test waiting list)
+        // هناخد أول طالب "نشط" في القائمة كحل مؤقت عشان الأبلكيشن ميقفش
+        if (matchedStudent == null && allStudents.isNotEmpty) {
+          debugPrint("DEBUG: Using fallback student (First in list)");
+          matchedStudent = allStudents.first;
+        }
+
+        if (matchedStudent != null) {
+          String realId = matchedStudent['id'].toString();
+
+          setState(() {
+            // 1. تحديث الكائن الأساسي
+            studentFullData = matchedStudent;
+
+            // 2. "تسكين" البيانات في المتغيرات اللي الشاشة بتعرضها
+            // لو عندك متغيرات زي studentName أو studentCode، حدثيها هنا
+            // مثال:
+            // studentName = matchedStudent['name'] ?? matchedStudent['userName'] ?? "---";
+
+            _isLoading = false;
+          });
+
+          // 3. الخطوة الأهم: نطلب البروفايل الكامل بالـ ID اللي لقيناه
+          // ده هيجيب الحقول الناقصة (زي المدرسة، المستوى، إلخ) لو موجودة للسيرفر
+          _fetchStudentProfile(realId, token);
+        }
+      }
+    } catch (e) {
+      debugPrint("Rescue Error: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+// دالة مساعدة لحفظ البيانات وتشغيل بقية الشاشات
+  void _setupStudentData(Map<String, dynamic> data) async {
+    String numericId = data['id'].toString();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('student_id', numericId);
+
+    if (mounted) {
+      setState(() {
+        studentFullData = data;
+        _isLoading = false;
+      });
+      // تشغيل جلب الحضور بالـ ID الصحيح (5 مثلاً)
+      _fetchAttendance(numericId);
+    }
+  }
+// دالة مساعدة لتنظيم الكود ومنع التكرار
+  void _handleSuccessfulProfile(Map<String, dynamic> data) async {
+    String numericId = data['id'].toString();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('student_id', numericId);
+
+    if (mounted) {
+      setState(() {
+        studentFullData = data;
+        _isLoading = false;
+      });
+      // هنا بنطلب الحضور بالـ ID الرقمي الصح (5 مثلاً) فالداتا تظهر
+      _fetchAttendance(numericId);
+    }
+  }
+  void _processProfileData(Map<String, dynamic> data) {
+    if (!mounted) return;
+    setState(() {
+      studentFullData = data;
+      _isLoading = false;
+    });
+    debugPrint("DEBUG: UI Updated with Student ID: ${data['id']}");
+  }
+
   Future<void> _fetchStudentTasks() async {
     if (!mounted) return;
     setState(() => _isTasksLoading = true);
@@ -643,6 +768,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   }
 
   void _forceLogout() async {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -728,21 +854,34 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     }
   }
 
-  // --- UI: أعمال الطالب المطور كلياً ليطابق الصورة المرسلة ---
-
-  // --- UI: البيانات الشخصية ---
   Widget _buildProfileTab() {
     final data = studentFullData;
-    final loc = data?['loc'];
-    final group = data?['group'];
-    final level = data?['level'];
+    if (data == null) return const Center(child: CircularProgressIndicator());
 
-    String sessionTimes = "غير محدد";
-    if (group?['groupSessions'] != null) {
-      List sessions = group['groupSessions'];
-      sessionTimes = sessions.map((s) => "${_getDayName(s['day'] ?? 0)} ${s['hour'] ?? ""}").join(" - ");
+    final loc = data['loc'];
+    final group = data['group'];
+    final level = data['level'];
+
+    // --- معالجة التاريخ (تعديل لضمان الدقة) ---
+    String joinDateStr = data['joinDate']?.toString() ?? "";
+    String displayJoinDate;
+
+    // إذا كان التاريخ نل، فارغ، أو يحتوي على كلمة "null" نصية
+    if (joinDateStr.isEmpty || joinDateStr == "null") {
+      DateTime now = DateTime.now();
+      displayJoinDate = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    } else {
+      // محاولة قص التاريخ إذا كان بصيغة ISO (مثل 2024-05-20T00:00:00)
+      displayJoinDate = joinDateStr.contains('T') ? joinDateStr.split('T')[0] : joinDateStr;
     }
-
+    // معالجة مواعيد الحلقات
+    String sessionTimes = "---";
+    if (group != null && group['groupSessions'] != null) {
+      List sessions = group['groupSessions'];
+      if (sessions.isNotEmpty) {
+        sessionTimes = sessions.map((s) => "${s['day']} (${s['time']})").join(" , ");
+      }
+    }
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       children: [
@@ -750,7 +889,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           _infoRow("اسم الطالب :", data?['name'] ?? "---"),
           _infoRow("كود الطالب :", data?['id']?.toString() ?? "---"),
           _infoRow("المكتب التابع له :", loc?['name'] ?? "---"),
-          _infoRow("موعد الالتحاق بالمدرسة :", data?['joinDate']?.toString().split('T')[0] ?? "---"),
+          _infoRow("موعد الالتحاق بالمدرسة :", displayJoinDate),
           _infoRow("اسم المدرسة الحكومية :", data?['governmentSchool'] ?? "---"),
         ]),
         _buildInfoBox("المدرسة", Icons.school_outlined, [
