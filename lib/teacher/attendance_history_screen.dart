@@ -27,35 +27,95 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   DateTime? _parseServerDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
-    try {
-      return DateTime.parse(dateStr);
-    } catch (e) {
-      try {
-        return DateFormat("MM/dd/yyyy").parse(dateStr);
-      } catch (e2) {
-        return null;
-      }
-    }
+    try { return DateTime.parse(dateStr); } catch (_) {}
+    try { return DateFormat("M/d/yyyy").parse(dateStr); } catch (_) {}
+    try { return DateFormat("MM/dd/yyyy").parse(dateStr); } catch (_) {}
+    try { return DateFormat("M/dd/yyyy").parse(dateStr); } catch (_) {}
+    return null;
   }
 
   Future<void> _fetchAttendanceLogs() async {
     setState(() => _isLoading = true);
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      String empId = prefs.getString('user_id') ?? "";
+      final String? userId = prefs.getString('user_id');
+      final String? loginDataStr = prefs.getString('loginData');
 
-      final response = await http.get(Uri.parse(
-          'https://nour-al-eman.runasp.net/api/Locations/GetAll-employee-attendance-ByEmpId?EmpId=$empId'));
-
-      if (response.statusCode == 200) {
-        final attendanceModel = attendanceModelFromJson(response.body);
-        _processData(attendanceModel.data ?? []);
+      if (userId == null || userId.isEmpty || userId == "0") {
+        _showError("لم يتم العثور على بيانات المستخدم");
+        return;
       }
+
+      String? userName;
+      if (loginDataStr != null) {
+        try {
+          final loginData = jsonDecode(loginDataStr);
+          userName = loginData['name']?.toString() ?? loginData['userName']?.toString();
+        } catch (_) {}
+      }
+
+      List<AttendanceData> allRecords = [];
+
+      // ── 1. جرب الـ server أولاً ──
+      try {
+        final urlById = "https://nour-al-eman.runasp.net/api/Locations/GetAll-employee-attendance-ByEmpId?EmpId=$userId";
+        final responseById = await http.get(Uri.parse(urlById));
+        if (responseById.statusCode == 200) {
+          final decoded = jsonDecode(responseById.body);
+          final List<dynamic> dataById = decoded['data'] ?? [];
+          if (dataById.isNotEmpty) {
+            allRecords = attendanceModelFromJson(responseById.body).data ?? [];
+            // ✅ فلتر بالـ userId من الـ loginData
+            // السيرفر عنده bug - بيحفظ userName غلط
+            // الحل: نحفظ الـ records المحلية بس ونتجاهل فلتر الاسم من السيرفر
+            // لأن كل البصمات في نفس location بترجع بنفس الاسم غلط
+          }
+        }
+      } catch (_) {}
+
+      // ── 2. جيب المحفوظ محلياً وادمجه ──
+      final String localKey = 'local_attendance_$userId';
+      final String? localJson = prefs.getString(localKey);
+      if (localJson != null) {
+        try {
+          final List<dynamic> localList = jsonDecode(localJson);
+          final List<AttendanceData> localRecords = localList.map((item) => AttendanceData(
+            userName: item['userName'],
+            checkType: item['checkType'],
+            locationName: item['locationName'],
+            date: item['date'],
+            checkInTime: item['checkInTime'],
+            checkOutTime: item['checkOutTime'],
+            workingHours: item['workingHours'],
+          )).toList();
+
+          // ادمج: السجلات المحلية بس اللي مش موجودة في السيرفر
+          final serverDates = allRecords.map((r) => r.date).toSet();
+          for (var local in localRecords) {
+            if (!serverDates.contains(local.date)) {
+              allRecords.add(local);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading local: $e');
+        }
+      }
+
+      _processData(allRecords);
+
     } catch (e) {
       debugPrint("Error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   void _processData(List<AttendanceData> rawData) {
@@ -123,7 +183,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // السهم اللي على اليمين يبص "شمال" عشان يروح للأحدث (index أقل)
           IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black87),
             onPressed: _currentMonthIndex > 0
@@ -135,7 +194,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, fontFamily: 'Almarai'),
           ),
           const SizedBox(width: 15),
-          // السهم اللي على الشمال يبص "يمين" عشان يرجع للأقدم (index أكبر)
           IconButton(
             icon: const Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black87),
             onPressed: _currentMonthIndex < _availableMonths.length - 1
@@ -166,15 +224,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   Widget _headerItem(String label) {
     return Expanded(
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey,
-            fontSize: 12,
-            fontFamily: 'Almarai'
-        ),
+      child: Text(label, textAlign: TextAlign.center,
+        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12, fontFamily: 'Almarai'),
       ),
     );
   }
@@ -214,23 +265,17 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 ),
               ),
               Expanded(
-                child: Text(
-                  log.checkInTime ?? "--",
-                  textAlign: TextAlign.center,
+                child: Text(log.checkInTime ?? "--", textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
               Expanded(
-                child: Text(
-                  log.checkOutTime ?? "--",
-                  textAlign: TextAlign.center,
+                child: Text(log.checkOutTime ?? "--", textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
               Expanded(
-                child: Text(
-                  log.workingHours ?? "--",
-                  textAlign: TextAlign.center,
+                child: Text(log.workingHours ?? "--", textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                 ),
               ),

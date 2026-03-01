@@ -162,13 +162,16 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         ),
         drawer: _buildTeacherSidebar(context),
         body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _isLoading
-              ? Center(child: CircularProgressIndicator(color: kActiveBlue))
-              : RefreshIndicator(
-              onRefresh: _loadInitialData,
-              child: KeyedSubtree(key: ValueKey(_currentTitle), child: _buildBody())
+          duration: const Duration(milliseconds: 250),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: child,
           ),
+          child: _isLoading
+              ? const Center(key: ValueKey('loading'), child: CircularProgressIndicator(color: kActiveBlue))
+              : KeyedSubtree(key: ValueKey(_currentTitle), child: _buildBody()),
         ),
       ),
     );
@@ -247,6 +250,31 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
   // --- واجهة مواعيد الدرس ---
   Widget _buildSessionsBody() {
+    // فحص شامل: مفيش sessions أو كل sessions مفيهاش groupSessions
+    final bool hasNoData = _sessions.isEmpty ||
+        _sessions.every((s) => s.groupSessions == null || s.groupSessions!.isEmpty);
+
+    if (hasNoData) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+
+            const SizedBox(height: 16),
+            const Text(
+              'لم يتم تحديد المواعيد أو المجموعات بعد',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Almarai',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -343,15 +371,17 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             ),
           ),
 
-          // خط فاصل وزر تسجيل الخروج في أسفل السايدبار
           const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20.0),
-            child: _buildSidebarItem(
-              Icons.logout,
-              "تسجيل الخروج",
-              color: Colors.redAccent,
-              isLogout: true,
+          SafeArea(
+            top: false, // مش عايزين مساحة من فوق
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10.0), // مسافة بسيطة
+              child: _buildSidebarItem(
+                Icons.logout,
+                "تسجيل الخروج",
+                color: Colors.redAccent,
+                isLogout: true,
+              ),
             ),
           ),
         ],
@@ -362,49 +392,65 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       {Color? color, bool isLogout = false, bool isPushScreen = false, Widget? screen}) {
     bool isSelected = _currentTitle == title;
 
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? kActiveBlue : (color ?? darkBlue),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? kActiveBlue.withOpacity(0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Icon(
+          icon,
           color: isSelected ? kActiveBlue : (color ?? darkBlue),
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontFamily: 'Almarai',
+          size: 22,
         ),
-      ),
-      onTap: () async {
-        Navigator.pop(context); // إغلاق السايدبار فوراً
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? kActiveBlue : (color ?? darkBlue),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontFamily: 'Almarai',
+          ),
+        ),
+        onTap: () async {
+          if (isLogout) {
+            Navigator.pop(context);
+            _showLogoutDialog();
+            return;
+          }
 
-        if (isLogout) {
-          _showLogoutDialog();
-        } else if (isPushScreen && screen != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
-        } else {
-          // لو نفس الصفحة الحالية، متعملش حاجة
-          if (_currentTitle == title) return;
+          if (isPushScreen && screen != null) {
+            // نحفظ الصفحة الحالية ونفتح الصفحة الجديدة
+            // لما المستخدم يرجع، الـ _currentTitle يفضل على الرئيسية مش على البيانات الشخصية
+            setState(() => _currentTitle = "الرئيسية");
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
+            return;
+          }
 
-          setState(() {
-            _currentTitle = title;
-          });
+          // نحدث الـ state أولاً قبل إغلاق الدراور — يمنع الـ lag
+          if (_currentTitle != title) {
+            setState(() => _currentTitle = title);
+          }
+          Navigator.pop(context);
 
-          // لو مواعيد الدرس بس جيب بياناتها
-          if (title == "مواعيد الدرس") {
+          if (title == "مواعيد الدرس" && _sessions.isEmpty) {
             setState(() => _isLoading = true);
             await _fetchSessions();
             if (mounted) setState(() => _isLoading = false);
           }
 
-          // لو البيانات الشخصية وما في بيانات محملة، جيبها
           if (title == "البيانات الشخصية" && teacherData == null) {
             setState(() => _isLoading = true);
             await _fetchTeacherProfile();
             if (mounted) setState(() => _isLoading = false);
           }
-        }
-      },
+        },
+      ),
     );
   }
   void _showLogoutDialog() {

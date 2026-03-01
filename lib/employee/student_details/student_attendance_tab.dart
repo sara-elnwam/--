@@ -26,13 +26,33 @@ class _StudentAttendanceTabState extends State<StudentAttendanceTab> {
     _fetchAttendance();
   }
 
-  // ترجمة الأرقام لكلمات زي ما الـ Web بيعمل بالظبط (Mapping)
-  String _mapNoteToText(int? noteId) {
-    switch (noteId) {
+  // ترجمة القيمة القادمة من السيرفر (ممكن تكون int أو String)
+  String _mapNoteToText(dynamic noteValue) {
+    if (noteValue == null) return "غير محدد";
+
+    // لو جاي كـ String جاهز من السيرفر مباشرة
+    if (noteValue is String) {
+      final trimmed = noteValue.trim();
+      if (trimmed.isEmpty) return "غير محدد";
+      // لو جاي كرقم بس في شكل String
+      final asInt = int.tryParse(trimmed);
+      if (asInt != null) return _noteFromInt(asInt);
+      return trimmed; // إرجاع النص كما هو
+    }
+
+    // لو جاي كـ int
+    if (noteValue is int) return _noteFromInt(noteValue);
+
+    return "غير محدد";
+  }
+
+  String _noteFromInt(int id) {
+    switch (id) {
       case 1: return "ممتاز";
       case 2: return "جيد جداً";
       case 3: return "جيد";
-      case 5: return "ضعيف"; // موجود في الرسبونس بتاعك رقم 5
+      case 4: return "مقبول";
+      case 5: return "ضعيف";
       default: return "غير محدد";
     }
   }
@@ -44,6 +64,7 @@ class _StudentAttendanceTabState extends State<StudentAttendanceTab> {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
+        debugPrint("🔍 ATTENDANCE RESPONSE: ${response.body}"); // مؤقت للـ debug
         if (mounted) {
           setState(() {
             attendanceList = responseData['data'] ?? []; // سحب الداتا من key: data

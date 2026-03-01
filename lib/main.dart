@@ -7,7 +7,7 @@ import 'package:flutter_downloader/flutter_downloader.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-
+import 'package:intl/date_symbol_data_local.dart';
 import 'login_screen.dart';
 import 'student/student_home_screen.dart';
 import 'teacher/teacher_home_screen.dart';
@@ -21,9 +21,12 @@ void main() async {
   );
 
   await FlutterDownloader.initialize(
-      debug: true,
-      ignoreSsl: true
+    debug: true,
+    ignoreSsl: true,
   );
+
+  // 🔥 ده كان ناقص
+  await initializeDateFormatting('ar', null);
 
   runApp(const MyApp());
 }

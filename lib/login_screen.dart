@@ -163,17 +163,44 @@ class _LoginScreenState extends State<LoginScreen> {
               final int selUserType = int.tryParse(selected['userType']?.toString() ?? "0") ?? 0;
               final String selUserId = selected['id']?.toString() ?? "";
 
-              // الطالب (userType=0) → دخول مباشر بدون GetAll
               if (selUserType == 0) {
+                // الحل: UserLogin بالـ GUID عشان السيرفر يرجع id رقمي خاص بالأكونت
+                try {
+                  final userLoginResponse = await http.post(
+                    Uri.parse('$baseUrl/Account/UserLogin'),
+                    headers: {"Content-Type": "application/json"},
+                    body: jsonEncode({
+                      "Phone": phone,
+                      "Password": password,
+                      "UserId": selUserId,
+                    }),
+                  );
+
+                  debugPrint("USER_LOGIN_RESPONSE: ${userLoginResponse.body}");
+
+                  if (userLoginResponse.statusCode == 200) {
+                    final dynamic decoded = jsonDecode(userLoginResponse.body);
+                    if (decoded is Map<String, dynamic>) {
+                      await _loginWithAccount(decoded);
+                      return;
+                    }
+                  }
+                } catch (e) {
+                  debugPrint("UserLogin error: $e");
+                }
+
+                // fallback لو فشل
                 final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('user_id', "");
                 await prefs.setString('user_guid', selUserId);
                 await prefs.setString('user_phone', phone);
-                await prefs.setString('loginData', jsonEncode(selected));
+                final studentData = Map<String, dynamic>.from(selected);
+                studentData['phoneNumber'] = phone;
+                await prefs.setString('loginData', jsonEncode(studentData));
+
                 await prefs.setBool('is_logged_in', true);
                 if (mounted) {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => StudentHomeScreen(loginData: selected)),
+                    MaterialPageRoute(builder: (_) => StudentHomeScreen(loginData: studentData)),
                   );
                 }
               } else {
@@ -193,13 +220,15 @@ class _LoginScreenState extends State<LoginScreen> {
               // أكتر من أكونت → عرض الداياليوق
               setState(() => _isLoading = false);
               if (!mounted) return;
-              showDialog(
+              showGeneralDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (_) => AccountSelectionDialog(
+                barrierLabel: '',
+                barrierColor: Colors.transparent,
+                transitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => AccountSelectionDialog(
                   accounts: decodedBody,
                   onSelect: (selected) async {
-                    Navigator.pop(context);
                     setState(() => _isLoading = true);
                     await handleSelectedAccount(Map<String, dynamic>.from(selected));
                   },
@@ -236,8 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         final loginDataToSave = <String, dynamic>{
           'userId': "",
+          'id': userId,       // ← الـ GUID محفوظ في 'id' عشان _loadInitialData يلاقيه
           'user_Id': userId,
-          'phoneNumber': phone,
+          'phoneNumber': phone, // ← التليفون صح
           'userType': userType,
         };
         await prefs.setString('user_id', "");

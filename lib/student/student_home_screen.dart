@@ -50,6 +50,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   String? _taskErrorMessage;
   final TextEditingController _answerController = TextEditingController();
   int? _expandedIndex;
+  List<File> _pendingFiles = [];
+  List<String> _pendingFileNames = [];
+  Map<String, dynamic>? _pendingTask;
+  // IDs محفوظة محلياً - بتفضل حتى بعد إغلاق التطبيق
+  Set<int> _answeredTaskIds = {};
+  Set<int> _uploadedTaskIds = {};
 
   @override
   void initState() {
@@ -68,12 +74,54 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     ));
 
     _loadInitialData();
+    // تشغيل الأنيميشن تلقائياً عند أول دخول للشاشة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pageAnimationController.forward();
+    });
   }
 
   @override
   void dispose() {
     _pageAnimationController.dispose();
     super.dispose();
+  }
+
+  // ── تحميل الـ IDs المحفوظة من SharedPreferences عند فتح التطبيق ──
+  Future<void> _loadSavedTaskIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String studentId = studentFullData?['id']?.toString() ?? '';
+    final List<String> answered = prefs.getStringList('answered_tasks_$studentId') ?? [];
+    final List<String> uploaded = prefs.getStringList('uploaded_tasks_$studentId') ?? [];
+    if (mounted) {
+      setState(() {
+        _answeredTaskIds = answered.map((e) => int.tryParse(e) ?? -1).toSet();
+        _uploadedTaskIds = uploaded.map((e) => int.tryParse(e) ?? -1).toSet();
+      });
+    }
+  }
+
+  // ── حفظ ID السؤال المجاوب ──
+  Future<void> _saveAnsweredTaskId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String studentId = studentFullData?['id']?.toString() ?? '';
+    final List<String> current = prefs.getStringList('answered_tasks_$studentId') ?? [];
+    if (!current.contains(id.toString())) {
+      current.add(id.toString());
+      await prefs.setStringList('answered_tasks_$studentId', current);
+    }
+    if (mounted) setState(() => _answeredTaskIds.add(id));
+  }
+
+  // ── حفظ ID البحث المرفوع ──
+  Future<void> _saveUploadedTaskId(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final String studentId = studentFullData?['id']?.toString() ?? '';
+    final List<String> current = prefs.getStringList('uploaded_tasks_$studentId') ?? [];
+    if (!current.contains(id.toString())) {
+      current.add(id.toString());
+      await prefs.setStringList('uploaded_tasks_$studentId', current);
+    }
+    if (mounted) setState(() => _uploadedTaskIds.add(id));
   }
 
   Future<void> testAllEndpoints() async {
@@ -116,30 +164,76 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
   }
   Future<void> _loadInitialData() async {
     final prefs = await SharedPreferences.getInstance();
-    String? incomingId = widget.loginData?['studentId']?.toString() ?? widget.loginData?['id']?.toString();
+
     String? token = widget.loginData?['token']?.toString() ?? prefs.getString('user_token');
 
-    debugPrint("DEBUG: Testing ID: $incomingId");
+    // ← الحل: السيرفر بيرجع userId (رقمي) مباشرة في الـ response
+    // مثال: {"userId":4,"userType":0,"user_Id":"5bf6a1c9-..."}
+    String? numericId = widget.loginData?['userId']?.toString() ?? prefs.getString('user_id');
+
+    debugPrint("DEBUG: numericId from loginData: $numericId");
+
+    // لو لقيناه مباشرة، بنروح للـ GetById فوراً بدون أي بحث
+    if (numericId != null && numericId.isNotEmpty && numericId != "0" && numericId != "null") {
+      await prefs.setString('student_id', numericId);
+      await _fetchStudentProfile(numericId, token);
+      return;
+    }
+
+    // fallback: لو ملقناش، نبحث في GetAll بالـ GUID
+    String? savedGuid = widget.loginData?['user_Id']?.toString() ?? prefs.getString('user_guid');
+    debugPrint("DEBUG: Fallback - searching by GUID: $savedGuid");
 
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/Student/GetById?id=$incomingId'),
+      final allResponse = await http.get(
+        Uri.parse('$baseUrl/Student/GetAll'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token'
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body)['data'] ?? jsonDecode(response.body);
-        _processProfileData(data); // نستخدم الدالة الموحدة
+      if (allResponse.statusCode == 200) {
+        final List<dynamic> allStudents = jsonDecode(allResponse.body)['data'] ?? [];
+
+        dynamic matched;
+
+        // بحث بالـ GUID
+        if (savedGuid != null && savedGuid.isNotEmpty) {
+          matched = allStudents.firstWhere(
+                (s) =>
+            s['user_Id']?.toString() == savedGuid ||
+                s['userId']?.toString() == savedGuid ||
+                s['guid']?.toString() == savedGuid,
+            orElse: () => null,
+          );
+        }
+
+        // بحث بالتليفون
+        if (matched == null) {
+          String? savedPhone = prefs.getString('user_phone');
+          if (savedPhone != null && savedPhone.isNotEmpty) {
+            matched = allStudents.firstWhere(
+                  (s) => s['phone']?.toString().trim() == savedPhone.trim(),
+              orElse: () => null,
+            );
+          }
+        }
+
+        if (matched != null) {
+          String foundId = matched['id'].toString();
+          debugPrint("DEBUG: Found student ID via GetAll: $foundId");
+          await prefs.setString('student_id', foundId);
+          await _fetchStudentProfile(foundId, token);
+        } else {
+          debugPrint("DEBUG: Student not found anywhere!");
+          if (mounted) setState(() => _isLoading = false);
+        }
       } else {
-        debugPrint("DEBUG: Status ${response.statusCode}, starting Rescue...");
-        // لو فشل، بنروح لدالة الإنقاذ وهي اللي هتقفل الـ Loading لما تخلص
-        await _rescueByUserName(token);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      debugPrint("DEBUG: Error in Initial Data: $e");
+      debugPrint("DEBUG: Error: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -157,10 +251,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           _isLoading = false;
         });
 
-        // بننادي الدوال حسب تعريفها في ملفك (بدون براميترز زيادة)
         _fetchAttendance(id);
         _fetchCourses();
         _fetchStudentTasks();
+        _loadSavedTaskIds(); // تحميل الـ IDs المحفوظة محلياً
 
       } else if (response.statusCode == 400 && id.contains('-')) {
         // لو الـ ID GUID وفشل، بنحاول ننقذ الموقف بالبحث
@@ -208,11 +302,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           );
         }
 
-        // 4. المحاولة "اليائسة" الأخيرة: لو لسه ملقاش (زي حالة test waiting list)
-        // هناخد أول طالب "نشط" في القائمة كحل مؤقت عشان الأبلكيشن ميقفش
-        if (matchedStudent == null && allStudents.isNotEmpty) {
-          debugPrint("DEBUG: Using fallback student (First in list)");
-          matchedStudent = allStudents.first;
+        // 4. لو ملقاش — نوقف التحميل ونظهر خطأ بدل ما ناخد أول طالب
+        if (matchedStudent == null) {
+          debugPrint("DEBUG: Could not find student - no fallback used");
+          if (mounted) setState(() => _isLoading = false);
+          return;
         }
 
         if (matchedStudent != null) {
@@ -281,7 +375,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
   Future<void> _fetchStudentTasks() async {
     if (!mounted) return;
-    setState(() => _isTasksLoading = true);
+    // مسح الداتا القديمة فوراً قبل جلب الجديدة — يمنع ظهور بيانات قديمة
+    setState(() {
+      _isTasksLoading = true;
+      studentTasksList = [];
+    });
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -303,8 +401,16 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
+        final List<dynamic> tasks = decoded['data'] ?? [];
+
+        // DEBUG: طباعة تفاصيل كل task للتشخيص
+        debugPrint("🔍 All tasks breakdown:");
+        for (final t in tasks) {
+          debugPrint("  ID=${t['id']} typeId=${t['typeId']} name=${t['name']} exams=${(t['studentExams'] as List? ?? []).length}");
+        }
+
         setState(() {
-          studentTasksList = decoded['data'] ?? [];
+          studentTasksList = tasks;
           _taskErrorMessage = studentTasksList.isEmpty ? "لا يوجد أعمال حالية" : null;
         });
         debugPrint(" Tasks Loaded: ${studentTasksList.length} items");
@@ -402,10 +508,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
       // 2. تجهيز البارامترات المطلوبة للـ API
       final queryParams = {
+        'examId': task['id'].toString(), // ← مهم جداً عشان السيرفر يعرف يحفظ على أي سؤال
         'levelId': task['levelId'].toString(),
         'typeId': task['typeId'].toString(),
         'stId': studentFullData?['id']?.toString() ?? "5",
-        'note': _answerController.text, // النص المكتوب في الخانة
+        'note': _answerController.text,
       };
 
       // 3. بناء الرابط النهائي كما في الـ Swagger
@@ -424,20 +531,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
       // 4. معالجة الرد وتحديث واجهة الموبايل
       if (response.statusCode == 200) {
-        setState(() {
-          // هذا السطر هو المسؤول عن إخفاء صندوق الكتابة وإظهار كارت النجاح فوراً
-          _isAnswerSubmitted = true;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text("تم حفظ الإجابة بنجاح"),
-                backgroundColor: Colors.green
-            )
-        );
-
-        // مسح النص بعد الإرسال الناجح
         _answerController.clear();
+        // بعد النجاح: refresh من السيرفر مباشرة — السيرفر هو المرجع
+        // السيرفر هيرجع studentExams ممليانة فالسؤال هيختفي تلقائياً
+        await _fetchStudentTasks();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("✅ تم حفظ الإجابة بنجاح"), backgroundColor: Colors.green),
+          );
+        }
       } else {
         debugPrint(" Server Error: ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
@@ -509,7 +611,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
           ),
 // داخل دالة _buildTaskHeaderCard
           InkWell(
-            onTap: () => _handlePickFile(), // تأكدي أنها _handlePickFile وليست _pickFile
+            onTap: () => _handlePickFile(task: task),
             child: Row(
               children: [
                 Text(
@@ -525,40 +627,148 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
       ),
     );
   }
-  Future<void> _handlePickFile() async {
+  Future<void> _handlePickFile({Map<String, dynamic>? task}) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'png', 'docx'],
+        type: FileType.custom, allowMultiple: true,
+        allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg', 'docx'],
       );
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _pendingFiles = result.files.where((f) => f.path != null).map((f) => File(f.path!)).toList();
+          _pendingFileNames = result.files.map((f) => f.name).toList();
+          _pendingTask = task;
+        });
+        _showUploadConfirmDialog();
+      }
+    } catch (e) { debugPrint("File Pick Error: $e"); }
+  }
 
-      if (result != null) {
-        File file = File(result.files.single.path!);
-        setState(() => _isTasksLoading = true);
+  void _showUploadConfirmDialog() {
+    showDialog(
+      context: context, barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.6),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 64, height: 64,
+                    decoration: BoxDecoration(color: kPrimaryBlue.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.upload_file_outlined, color: kPrimaryBlue, size: 32)),
+                const SizedBox(height: 16),
+                Text(_pendingFiles.length == 1 ? "تأكيد رفع الملف" : "تأكيد رفع ${_pendingFiles.length} ملفات",
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextDark)),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: ListView.separated(
+                    shrinkWrap: true, itemCount: _pendingFileNames.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1, color: kBorderColor),
+                    itemBuilder: (_, i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(children: [
+                        const Icon(Icons.insert_drive_file_outlined, color: kPrimaryBlue, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(_pendingFileNames[i],
+                            style: const TextStyle(color: kTextDark, fontSize: 13, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis)),
+                      ]),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(_pendingFiles.length == 1 ? "هل تريد رفع هذا الملف؟" : "هل تريد رفع هذه الملفات؟",
+                    style: const TextStyle(color: kLabelGrey, fontSize: 13)),
+                const SizedBox(height: 24),
+                Row(children: [
+                  Expanded(child: OutlinedButton(
+                    onPressed: () {
+                      setState(() { _pendingFiles = []; _pendingFileNames = []; _pendingTask = null; });
+                      Navigator.pop(ctx);
+                    },
+                    style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: kBorderColor),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 13)),
+                    child: const Text("إلغاء", style: TextStyle(color: kLabelGrey, fontWeight: FontWeight.bold)),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: ElevatedButton(
+                    onPressed: () { Navigator.pop(ctx); _uploadConfirmedFiles(); },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimaryBlue, foregroundColor: Colors.white, elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 13)),
+                    child: const Text("تأكيد الرفع", style: TextStyle(fontWeight: FontWeight.bold)),
+                  )),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-        final prefs = await SharedPreferences.getInstance();
-        String? token = prefs.getString('user_token');
-
-        var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/Student/UploadTaskFile'));
-        request.headers['Authorization'] = 'Bearer $token';
-        request.fields['stId'] = studentFullData?['id']?.toString() ?? "5";
-        request.fields['taskId'] = studentTasksList.first['id'].toString();
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
-
-        var streamedResponse = await request.send();
-        var response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200) {
-          setState(() {
-            _isFileUploaded = true; // هذا السطر هو المسؤول عن تبديل الكارت العلوي فوراً
-          });
+  Future<void> _uploadConfirmedFiles() async {
+    if (_pendingFiles.isEmpty) return;
+    setState(() => _isTasksLoading = true);
+    final filesToUpload = List<File>.from(_pendingFiles);
+    final taskSnapshot = _pendingTask;
+    setState(() { _pendingFiles = []; _pendingFileNames = []; _pendingTask = null; });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('user_token');
+      final stId = studentFullData?['id']?.toString() ?? "5";
+      final levelId = studentFullData?['levelId']?.toString() ?? "1";
+      final typeId = taskSnapshot?['typeId']?.toString() ?? "2";
+      int successCount = 0;
+      // نرفع ملف واحد بس (أول ملف) — السيرفر بيرفض التكرار
+      final examId = taskSnapshot?['id']?.toString() ?? '';
+      final file = filesToUpload.first;
+      final uri = Uri.parse('https://nour-al-eman.runasp.net/api/StudentCources/UploadStudentExam')
+          .replace(queryParameters: {
+        'levelId': levelId,
+        'typeId': typeId,
+        'stId': stId,
+        'examId': examId,
+      });
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = '*/*';
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      final response = await http.Response.fromStream(await request.send());
+      debugPrint("Upload ${response.statusCode}: ${response.body}");
+      // السيرفر بيرد 200 حتى لو في error في الـ body — نتحقق من "Done"
+      final responseBody = response.body;
+      if (response.statusCode == 200 && responseBody.contains('Done')) {
+        successCount = 1;
+      } else if (response.statusCode == 200 && !responseBody.contains('error')) {
+        successCount = 1;
+      }
+      if (mounted) {
+        if (successCount > 0) {
+          if (taskSnapshot != null) {
+            await _saveUploadedTaskId(taskSnapshot['id'] ?? -1);
+          }
+          _fetchStudentTasks();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("✅ تم رفع $successCount ملف بنجاح"), backgroundColor: Colors.green));
+        } else {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("تم رفع الملف بنجاح"), backgroundColor: Colors.green)
-          );
+              const SnackBar(content: Text("❌ فشل رفع الملفات"), backgroundColor: Colors.red));
         }
       }
     } catch (e) {
       debugPrint("Upload Error: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("حدث خطأ أثناء الرفع"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isTasksLoading = false);
     }
@@ -568,33 +778,55 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     if (_isTasksLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    // فلترة المهام التي لم تحل (studentExams فارغة)
-    final pendingTasks = studentTasksList.where((t) => (t['studentExams'] as List).isEmpty).toList();
-
-    // إذا كانت المهام فارغة تماماً من السيرفر
-    if (pendingTasks.isEmpty) {
-      return _buildNoTasksView();
-    }
-
-    final activeTask = pendingTasks.first;
     final bool isArabic = Localizations.localeOf(context).languageCode == 'ar';
+
+    // typeId=2: أبحاث — نفس منطق السؤال الأسبوعي بالظبط
+    // خد أحدث بحث واحد بس (أعلى ID من كل الأبحاث)
+    // لو الأحدث اترفع (exams > 0) → اعرض "لا يوجد واجبات"
+    // لو الأحدث لم يترفع (exams = 0) → اعرضه للطالب
+    final allResearch = studentTasksList.where((t) => t['typeId'] == 2).toList();
+
+    final latestResearch = allResearch.isNotEmpty
+        ? allResearch.reduce((a, b) => (a['id'] ?? 0) > (b['id'] ?? 0) ? a : b)
+        : null;
+
+    final bool latestResearchUploaded = latestResearch == null
+        || (latestResearch['studentExams'] as List? ?? []).isNotEmpty;
+
+    // للعرض: لو في بحث جديد لم يترفع، اعرضه — غير كده فاضي
+    final pendingResearch = (latestResearch != null && !latestResearchUploaded)
+        ? [latestResearch]
+        : <dynamic>[];
+
+    // typeId=1: السؤال الأسبوعي — أحدث سؤال واحد بس (أعلى ID)
+    final allWeekly = studentTasksList.where((t) => t['typeId'] == 1).toList();
+    final latestWeekly = allWeekly.isNotEmpty
+        ? allWeekly.reduce((a, b) => (a['id'] ?? 0) > (b['id'] ?? 0) ? a : b)
+        : null;
+    final bool latestWeeklyAnswered = latestWeekly == null
+        || (latestWeekly['studentExams'] as List? ?? []).isNotEmpty;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // الكارت العلوي (رفع الملف)
-          _isFileUploaded
-              ? _buildNoUploadsCard() // يظهر هذا الكارت عند نجاح الرفع
-              : _buildTaskHeaderCard(activeTask),
-
-          const SizedBox(height: 20),
-
-          // الكارت السفلي (الإجابة النصية)
-          _isAnswerSubmitted
-              ? _buildSuccessMessageCard() // يظهر هذا الكارت عند نجاح حفظ الإجابة
-              : _buildTaskAnswerCard(activeTask, isArabic ? TextAlign.right : TextAlign.left),
+          _buildSectionLabel("الأبحاث", Icons.upload_file_outlined),
+          const SizedBox(height: 10),
+          if (pendingResearch.isEmpty)
+            _buildNoUploadsCard()
+          else
+            ...pendingResearch.map((task) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildResearchTaskCard(task),
+            )),
+          const SizedBox(height: 24),
+          _buildSectionLabel("السؤال الأسبوعي", Icons.help_outline),
+          const SizedBox(height: 10),
+          if (latestWeekly == null || latestWeeklyAnswered)
+            _buildSuccessMessageCard()
+          else
+            _buildTaskAnswerCard(latestWeekly, isArabic ? TextAlign.right : TextAlign.left),
         ],
       ),
     );
@@ -879,7 +1111,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
     if (group != null && group['groupSessions'] != null) {
       List sessions = group['groupSessions'];
       if (sessions.isNotEmpty) {
-        sessionTimes = sessions.map((s) => "${s['day']} (${s['time']})").join(" , ");
+        sessionTimes = sessions.map((s) {
+          String dayName = _getDayName(int.tryParse(s['day']?.toString() ?? "0") ?? 0);
+          String hour = s['hour']?.toString() ?? "---";
+          return "$dayName ($hour)";
+        }).join(" ، ");
       }
     }
     return ListView(
@@ -1159,35 +1395,97 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> with TickerProvid
 
   Widget _drawerItem(int index, IconData icon, String title, {bool isLogout = false}) {
     bool isSelected = _selectedIndex == index;
-    return ListTile(
-      selected: isSelected,
-      selectedTileColor: kSecondaryBlue,
-      leading: Icon(icon, color: isLogout ? kDangerRed : (isSelected ? kPrimaryBlue : kLabelGrey)),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isLogout ? kDangerRed : (isSelected ? kPrimaryBlue : kTextDark),
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
-        ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? kSecondaryBlue : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
       ),
-      onTap: () {
-        if (isLogout) {
-          _forceLogout();
-        } else {
-          Navigator.pop(context);
-          if (_selectedIndex != index) {
-            setState(() => _selectedIndex = index);
-            _pageAnimationController.reset();
-            _pageAnimationController.forward();
-            String studentId = studentFullData?['id']?.toString() ?? "";
-            if (index == 1) _fetchAttendance(studentId);
-            else if (index == 2) _fetchCourses();
-            else if (index == 3) _fetchStudentTasks();
-            else if (index == 4) _fetchExams(studentId);
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Icon(icon, color: isLogout ? kDangerRed : (isSelected ? kPrimaryBlue : kLabelGrey), size: 22),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isLogout ? kDangerRed : (isSelected ? kPrimaryBlue : kTextDark),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+        onTap: () {
+          if (isLogout) {
+            _forceLogout();
+          } else {
+            if (_selectedIndex != index) {
+              // نحدث الـ state أولاً قبل إغلاق الدراور — يمنع الـ lag
+              setState(() => _selectedIndex = index);
+              _pageAnimationController.reset();
+              _pageAnimationController.forward();
+              String studentId = studentFullData?['id']?.toString() ?? "";
+              if (index == 1) _fetchAttendance(studentId);
+              else if (index == 2) _fetchCourses();
+              else if (index == 3) _fetchStudentTasks();
+              else if (index == 4) _fetchExams(studentId);
+            }
+            // إغلاق الدراور بعد تحديث الـ state مباشرةً
+            Navigator.pop(context);
           }
-        }
-      },
+        },
+      ), // ListTile
+    ); // AnimatedContainer
+  }
+
+  Widget _buildSectionLabel(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: kPrimaryBlue, size: 18),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kPrimaryBlue)),
+        const SizedBox(width: 8),
+        const Expanded(child: Divider(color: kBorderColor, thickness: 1.2)),
+      ],
+    );
+  }
+
+  Widget _buildResearchTaskCard(Map<String, dynamic> task) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))],
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("الإسم: ${task['name'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text("التفاصيل: ${task['description'] ?? ''}", style: TextStyle(color: Colors.grey.shade700, fontSize: 14)),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () => _handlePickFile(task: task),
+            child: const Row(
+              children: [
+                Text("رفع الملف", style: TextStyle(color: Color(0xFFD35400), fontWeight: FontWeight.bold)),
+                SizedBox(width: 8),
+                Icon(Icons.upload_outlined, color: Color(0xFFD35400), size: 28),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

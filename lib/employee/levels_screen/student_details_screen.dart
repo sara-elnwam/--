@@ -68,7 +68,15 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         setState(() {
-          studentData = responseData['data'];
+          var rawData = responseData['data'];
+
+          // الحل هنا: لو السيرفر بعت قائمة [ ] ناخد أول عنصر، لو بعت كائن { } ناخده هو
+          if (rawData is List && rawData.isNotEmpty) {
+            studentData = rawData[0];
+          } else if (rawData is Map<String, dynamic>) {
+            studentData = rawData;
+          }
+
           isLoadingInfo = false;
         });
       }
@@ -77,7 +85,6 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       setState(() => isLoadingInfo = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -147,7 +154,6 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       return const Center(child: Text("تعذر تحميل البيانات"));
     }
 
-    // معالجة تاريخ الالتحاق
     String joinDateDisplay;
     if (studentData!['joinDate'] == null) {
       joinDateDisplay = "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
@@ -155,14 +161,12 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       joinDateDisplay = _formatDate(studentData!['joinDate']);
     }
 
-    // حساب العمر بدقة (عشان مانزودش سنة غلط)
     String age = "---";
     if (studentData!['birthDate'] != null) {
       try {
         DateTime birth = DateTime.parse(studentData!['birthDate']);
         DateTime today = DateTime.now();
         int years = today.year - birth.year;
-        // لو يوم ميلاده لسه مجاش السنة دي، ننقص سنة
         if (today.month < birth.month || (today.month == birth.month && today.day < birth.day)) {
           years--;
         }
@@ -172,13 +176,31 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       }
     }
 
-    // تجميع مواعيد الحلقة
+    // تجميع مواعيد الحلقة بشكل دقيق
     String sessionTimes = "---";
-    if (studentData!['group'] != null && studentData!['group']['groupSessions'] != null) {
-      List sessions = studentData!['group']['groupSessions'];
-      sessionTimes = sessions.map((s) => "${_getDayName(s['day'])} (${s['hour']})").join(" / ");
-    }
 
+    if (studentData != null && studentData!['group'] != null) {
+      final group = studentData!['group'];
+
+      // الوصول لمصفوفة الجلسات (المواعيد)
+      final List? sessions = group['groupSessions'];
+
+      if (sessions != null && sessions.isNotEmpty) {
+        // تحويل كل جلسة لنص (يوم وساعة) وجمعهم مع بعض
+        sessionTimes = sessions.map((s) {
+          String dayName = _getDayName(s['day'] ?? 0);
+          String hour = s['hour'] ?? "";
+          return "$dayName ($hour)";
+        }).join(" - ");
+      } else {
+        // لو مفيش جلسات، جرب الحقول النصية القديمة كـ Backup
+        final String d = group['days']?.toString() ?? "";
+        final String t = group['time']?.toString() ?? "";
+        if (d.isNotEmpty) sessionTimes = "$d ($t)";
+      }
+    } else {
+      sessionTimes = "غير محدد"; // لو الـ group نفسه نال
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), // تصغير البادينج الخارجي
       child: Column(
@@ -219,16 +241,15 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       ),
     );
   }
-// دالة مساعدة لتحويل رقم اليوم لاسم (نفس المنطق المستخدم في مستوياتك)
   String _getDayName(int day) {
     switch (day) {
-      case 0: return "السبت";
-      case 1: return "الأحد";
-      case 2: return "الاثنين";
-      case 3: return "الثلاثاء";
-      case 4: return "الأربعاء";
-      case 5: return "الخميس";
-      case 6: return "الجمعة";
+      case 1: return "السبت";
+      case 2: return "الأحد";
+      case 3: return "الاثنين";
+      case 4: return "الثلاثاء";
+      case 5: return "الأربعاء";
+      case 6: return "الخميس";
+      case 7: return "الجمعة";
       default: return "";
     }
   }
@@ -309,7 +330,7 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
               style: const TextStyle(
                   color: kTextDark,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12, // صغرت الخط من 13 لـ 12
+                  fontSize: 12,
                   fontFamily: 'Almarai'),
             ),
           ),

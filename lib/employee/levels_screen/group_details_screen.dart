@@ -3,12 +3,14 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'student_details_screen.dart';
+import 'staff_details_screen.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final int groupId;
   final int levelId;
   final String groupName;
   final String teacherName;
+  final int teacherId;
 
   const GroupDetailsScreen({
     super.key,
@@ -16,6 +18,7 @@ class GroupDetailsScreen extends StatefulWidget {
     required this.levelId,
     required this.groupName,
     required this.teacherName,
+    required this.teacherId,
   });
 
   @override
@@ -27,12 +30,16 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   bool _isLoading = true;
   String? displayGroupName;
   String? displayTeacherName;
-  // ألوان الثيم المستخدمة
+
+  // ─── المشكلة الأولى: teacherId كان بييجي 0 من السيرفر
+  // الحل: نحفظ الـ ID اللي جه من الشاشة السابقة كـ fallback
+  // وكمان نحاول نجيب الـ ID الحقيقي من response الـ group
+  int _resolvedTeacherId = 0;
+
   final Color kPrimaryBlue = const Color(0xFF07427C);
   final Color kTextDark = const Color(0xFF2E3542);
   final Color orangeButton = const Color(0xFFC66422);
 
-  // متغيرات خاصة بعملية تعديل المجموعة
   List<dynamic> teachersList = [];
   List<dynamic> locationsList = [];
   int? selectedTeacherId;
@@ -43,11 +50,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchGroupData();
     displayGroupName = widget.groupName;
     displayTeacherName = widget.teacherName;
+    // ─── المشكلة الثانية: كانت بتتكالل مرتين! تم حذف الاستدعاء المكرر
+    _resolvedTeacherId = widget.teacherId;
     _fetchGroupData();
-    _loadInitialDataForEdit(); // تحميل بيانات المشايخ والأماكن للتعديل
+    _loadInitialDataForEdit();
   }
 
   Future<void> _fetchGroupData() async {
@@ -58,39 +66,67 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       final prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('token');
 
-      final url = Uri.parse('https://nour-al-eman.runasp.net/api/Group/GetGroupDetails?GroupId=${widget.groupId}&LevelId=${widget.levelId}');
+      final url = Uri.parse(
+          'https://nour-al-eman.runasp.net/api/Group/GetGroupDetails?GroupId=${widget.groupId}&LevelId=${widget.levelId}');
 
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
       });
 
+      debugPrint("Group Response: ${response.body}");
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> decodedData = json.decode(response.body);
-
-        // لنفترض أن السيرفر يعيد بيانات المجموعة في حقل اسمه 'group' أو داخل 'data'
-        // تأكد من هيكلة الـ JSON لديك، غالباً ستكون هكذا:
         final List<dynamic> studentsList = decodedData['data'] ?? [];
 
         if (mounted) {
           setState(() {
             _students = studentsList;
-            // تحديث الأسماء من البيانات القادمة من السيرفر (تأكد من المسميات في الـ API)
-            if(decodedData['groupName'] != null) displayGroupName = decodedData['groupName'];
-            if(decodedData['teacherName'] != null) displayTeacherName = decodedData['teacherName'];
+            if (decodedData['groupName'] != null) {
+              displayGroupName = decodedData['groupName'];
+            }
+            if (decodedData['teacherName'] != null) {
+              displayTeacherName = decodedData['teacherName'];
+            }
 
+            // ─── محاولة استخراج الـ teacherId الحقيقي من الـ response
+            // السيرفر ممكن يبعته في أي من هذه الـ keys
+            final dynamic rawEmpId =
+                decodedData['empId'] ??
+                    decodedData['EmpId'] ??
+                    decodedData['emp']?['id'] ??
+                    decodedData['teacher']?['id'];
+
+            if (rawEmpId != null) {
+              final int parsedId = int.tryParse(rawEmpId.toString()) ?? 0;
+              if (parsedId > 0) {
+                _resolvedTeacherId = parsedId;
+                debugPrint("✅ Teacher ID from response: $_resolvedTeacherId");
+              }
+            }
+
+            // لو السيرفر ما رجعش ID صح، نستخدم اللي جاء من الشاشة السابقة
+            if (_resolvedTeacherId == 0 && widget.teacherId > 0) {
+              _resolvedTeacherId = widget.teacherId;
+            }
+
+            debugPrint("🔑 Final teacherId to use: $_resolvedTeacherId");
             _isLoading = false;
           });
         }
       }
-      // ...
-    } catch (e) { /* ... */ }
+    } catch (e) {
+      debugPrint("Group fetch error: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  // --- جلب المشايخ والأماكن لغرض التعديل ---
   Future<void> _loadInitialDataForEdit() async {
     try {
-      final locRes = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Locations/Getall'));
-      final techRes = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/Getall'));
+      final locRes =
+      await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Locations/Getall'));
+      final techRes =
+      await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Employee/Getall'));
       if (mounted) {
         setState(() {
           locationsList = jsonDecode(locRes.body)['data'] ?? [];
@@ -111,8 +147,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           ? "${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}"
           : "20:00";
 
-      // إرسال البيانات مباشرة بدون كائن خارجي (Unwrapped Payload)
-      // مع استخدام PascalCase (أول حرف كبير) لجميع الحقول الرئيسية
       final Map<String, dynamic> requestBody = {
         "Id": widget.groupId,
         "Name": name,
@@ -123,25 +157,26 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         "Status": true,
         "Days": selectedDays.isEmpty ? [1, 2, 3] : selectedDays,
         "Time": formattedTime,
-        "GroupSessions": selectedDays.map((dayId) => {
+        "GroupSessions": selectedDays
+            .map((dayId) => {
           "Day": dayId,
           "Hour": formattedTime,
           "Status": true,
           "Serial": 1
-        }).toList(),
+        })
+            .toList(),
       };
 
-      print("Final Attempt Payload: ${jsonEncode(requestBody)}");
+      debugPrint("Final Attempt Payload: ${jsonEncode(requestBody)}");
 
       final response = await http.put(
         Uri.parse('https://nour-al-eman.runasp.net/api/Group/Update'),
-
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
-          'Accept': 'application/json', // إضافة للتأكيد
+          'Accept': 'application/json',
         },
-        body: jsonEncode(requestBody), // إرسال requestBody مباشرة
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200 || response.statusCode == 204) {
@@ -149,21 +184,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         if (mounted) Navigator.pop(context);
         _fetchGroupData();
       } else {
-        print("Status Code: ${response.statusCode}");
-        print("Response Error: ${response.body}");
+        debugPrint("Status Code: ${response.statusCode}");
+        debugPrint("Response Error: ${response.body}");
         _showSnackBar("فشل التحديث: خطأ في هيكلة البيانات", Colors.orange);
       }
     } catch (e) {
       _showSnackBar("خطأ في الاتصال بالسيرفر", Colors.red);
     }
   }
-  void _showEditGroupDialog() {
-    // 1. تهيئة القيم الحالية قبل فتح الـ Dialog لتظهر للمستخدم
-    // ملاحظة: يفضل أن تكون هذه البيانات قادمة من API التفاصيل، ولكن سنستخدم المتاح حالياً
-    TextEditingController nameCont = TextEditingController(text: widget.groupName);
 
-    // تأكد من ضبط القيم المبدئية إذا كانت فارغة
-    selectedTeacherId ??= null; // هنا يفضل تمرير الـ ID الأصلي من الصفحة السابقة
+  void _showEditGroupDialog() {
+    TextEditingController nameCont = TextEditingController(text: widget.groupName);
+    selectedTeacherId ??= null;
     selectedLocationId ??= null;
 
     showDialog(
@@ -172,7 +204,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Center(child: Text("تعديل المجموعة", style: TextStyle(color: kPrimaryBlue, fontWeight: FontWeight.bold, fontFamily: 'Almarai'))),
+          title: Center(
+              child: Text("تعديل المجموعة",
+                  style: TextStyle(
+                      color: kPrimaryBlue,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Almarai'))),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -188,7 +225,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     isExpanded: true,
                     value: selectedTeacherId,
                     decoration: _inputDecoration("اختر الشيخ"),
-                    items: teachersList.map((t) => DropdownMenuItem<int>(value: t['id'], child: Text(t['name'] ?? ""))).toList(),
+                    items: teachersList
+                        .map((t) => DropdownMenuItem<int>(
+                        value: t['id'], child: Text(t['name'] ?? "")))
+                        .toList(),
                     onChanged: (val) => selectedTeacherId = val,
                   ),
                   const SizedBox(height: 15),
@@ -196,7 +236,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                   StatefulBuilder(builder: (context, setDialogState) {
                     return OutlinedButton.icon(
                       icon: const Icon(Icons.access_time),
-                      label: Text(selectedTime == null ? "اختر الوقت" : selectedTime!.format(context)),
+                      label: Text(selectedTime == null
+                          ? "اختر الوقت"
+                          : selectedTime!.format(context)),
                       onPressed: () async {
                         TimeOfDay? picked = await showTimePicker(
                           context: context,
@@ -215,37 +257,54 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     isExpanded: true,
                     value: selectedLocationId,
                     decoration: _inputDecoration("اختر المكتب"),
-                    items: locationsList.map((l) => DropdownMenuItem<int>(value: l['id'], child: Text(l['name'] ?? ""))).toList(),
+                    items: locationsList
+                        .map((l) => DropdownMenuItem<int>(
+                        value: l['id'], child: Text(l['name'] ?? "")))
+                        .toList(),
                     onChanged: (val) => selectedLocationId = val,
                   ),
                   const SizedBox(height: 20),
                   _buildLabel("الأيام"),
-                  StatefulBuilder(builder: (context, setSt) => Wrap(
-                    spacing: 5,
-                    children: List.generate(7, (i) {
-                      final days = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
-                      bool isSel = selectedDays.contains(i + 1);
-                      return FilterChip(
-                        label: Text(days[i], style: TextStyle(fontSize: 11, color: isSel ? Colors.white : Colors.black)),
-                        selected: isSel,
-                        selectedColor: orangeButton,
-                        onSelected: (v) => setSt(() => v ? selectedDays.add(i+1) : selectedDays.remove(i+1)),
-                      );
-                    }),
-                  )),
+                  StatefulBuilder(
+                      builder: (context, setSt) => Wrap(
+                        spacing: 5,
+                        children: List.generate(7, (i) {
+                          final days = [
+                            "السبت",
+                            "الأحد",
+                            "الاثنين",
+                            "الثلاثاء",
+                            "الأربعاء",
+                            "الخميس",
+                            "الجمعة"
+                          ];
+                          bool isSel = selectedDays.contains(i + 1);
+                          return FilterChip(
+                            label: Text(days[i],
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSel ? Colors.white : Colors.black)),
+                            selected: isSel,
+                            selectedColor: orangeButton,
+                            onSelected: (v) => setSt(() =>
+                            v ? selectedDays.add(i + 1) : selectedDays.remove(i + 1)),
+                          );
+                        }),
+                      )),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+            TextButton(
+                onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
             ElevatedButton(
               onPressed: () {
-                // تجهيز الـ Payload بناءً على صورة الـ Network
                 _updateGroupApi(nameCont.text);
               },
               style: ElevatedButton.styleFrom(backgroundColor: kPrimaryBlue),
-              child: const Text("حفظ", style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
+              child: const Text("حفظ",
+                  style: TextStyle(color: Colors.white, fontFamily: 'Almarai')),
             ),
           ],
         ),
@@ -253,7 +312,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  // --- بوب اب إضافة طالب للمجموعة ---
   Future<List<dynamic>> _fetchAvailableStudents() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -268,7 +326,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
         if (decodedData is List) return decodedData;
-        else if (decodedData is Map && decodedData['data'] != null) return decodedData['data'];
+        if (decodedData is Map && decodedData['data'] != null) return decodedData['data'];
       }
     } catch (e) {
       debugPrint("❌ Exception during fetch: $e");
@@ -307,21 +365,21 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   }
 
   void _showAddStudentDialog() {
-    List<dynamic> _allAvailable = [];
-    List<dynamic> _filteredAvailable = [];
-    bool _isFetching = true;
-    final TextEditingController _searchController = TextEditingController();
+    List<dynamic> allAvailable = [];
+    List<dynamic> filteredAvailable = [];
+    bool isFetching = true;
+    final TextEditingController searchController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          if (_allAvailable.isEmpty && _isFetching) {
+          if (allAvailable.isEmpty && isFetching) {
             _fetchAvailableStudents().then((data) {
               setDialogState(() {
-                _allAvailable = data;
-                _filteredAvailable = data;
-                _isFetching = false;
+                allAvailable = data;
+                filteredAvailable = data;
+                isFetching = false;
               });
             });
           }
@@ -330,43 +388,52 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             textDirection: TextDirection.rtl,
             child: AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              title: const Text("إضافة طالب للمجموعة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
+              title: const Text("إضافة طالب للمجموعة",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Almarai')),
               content: SizedBox(
                 width: double.maxFinite,
                 height: 400,
                 child: Column(
                   children: [
                     TextField(
-                      controller: _searchController,
+                      controller: searchController,
                       decoration: InputDecoration(
                         hintText: "ابحث باسم الطالب...",
                         prefixIcon: const Icon(Icons.search, size: 20),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
+                        contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
                       ),
                       onChanged: (value) {
                         setDialogState(() {
-                          _filteredAvailable = _allAvailable
-                              .where((s) => s['name'].toString().toLowerCase().contains(value.toLowerCase()))
+                          filteredAvailable = allAvailable
+                              .where((s) => s['name']
+                              .toString()
+                              .toLowerCase()
+                              .contains(value.toLowerCase()))
                               .toList();
                         });
                       },
                     ),
                     const SizedBox(height: 15),
                     Expanded(
-                      child: _isFetching
+                      child: isFetching
                           ? const Center(child: CircularProgressIndicator())
-                          : _filteredAvailable.isEmpty
+                          : filteredAvailable.isEmpty
                           ? const Center(child: Text("لا توجد نتائج"))
                           : ListView.separated(
-                        itemCount: _filteredAvailable.length,
+                        itemCount: filteredAvailable.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
-                          final student = _filteredAvailable[index];
+                          final student = filteredAvailable[index];
                           return ListTile(
-                            title: Text(student['name'], style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')),
+                            title: Text(student['name'],
+                                style: const TextStyle(
+                                    fontSize: 13, fontFamily: 'Almarai')),
                             trailing: IconButton(
-                              icon: const Icon(Icons.add_circle, color: Colors.green),
+                              icon: const Icon(Icons.add_circle,
+                                  color: Colors.green),
                               onPressed: () {
                                 Navigator.pop(context);
                                 _addStudentToGroup(student);
@@ -386,7 +453,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  // --- دوال حذف الطالب وتغيير كلمة السر ---
   Future<void> _updatePassword(int studentId, String newPassword) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -399,7 +465,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         },
         body: json.encode({"id": studentId, "password": newPassword}),
       );
-      if (response.statusCode == 200) _showSnackBar("تم تحديث كلمة المرور", Colors.green);
+      if (response.statusCode == 200) {
+        _showSnackBar("تم تحديث كلمة المرور", Colors.green);
+      }
     } catch (e) {
       _showSnackBar("حدث خطأ", Colors.red);
     }
@@ -408,7 +476,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   Future<void> _deleteStudent(int studentId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final url = Uri.parse('https://nour-al-eman.runasp.net/api/Account/DeActivate?id=$studentId&type=0');
+      final url = Uri.parse(
+          'https://nour-al-eman.runasp.net/api/Account/DeActivate?id=$studentId&type=0');
       final response = await http.post(url, headers: {
         'Authorization': 'Bearer ${prefs.getString('token')}',
         'Content-Type': 'application/json',
@@ -426,9 +495,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   }
 
   void _showResetPasswordDialog(int studentId, String studentName) {
-    final TextEditingController _passController = TextEditingController();
-    final TextEditingController _confirmPassController = TextEditingController();
-    bool _isSubmitting = false;
+    final TextEditingController passController = TextEditingController();
+    final TextEditingController confirmPassController = TextEditingController();
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -437,26 +506,31 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           textDirection: TextDirection.rtl,
           child: AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            title: const Text("إعادة تعيين كلمة السر", style: TextStyle(fontFamily: 'Almarai')),
+            title: const Text("إعادة تعيين كلمة السر",
+                style: TextStyle(fontFamily: 'Almarai')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildPopupTextField("كلمة المرور الجديدة", _passController),
+                _buildPopupTextField("كلمة المرور الجديدة", passController),
                 const SizedBox(height: 10),
-                _buildPopupTextField("تأكيد كلمة المرور", _confirmPassController),
+                _buildPopupTextField("تأكيد كلمة المرور", confirmPassController),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("إلغاء")),
               ElevatedButton(
                 onPressed: () async {
-                  if (_passController.text == _confirmPassController.text) {
-                    setDialogState(() => _isSubmitting = true);
-                    await _updatePassword(studentId, _passController.text);
-                    Navigator.pop(context);
+                  if (passController.text == confirmPassController.text) {
+                    setDialogState(() => isSubmitting = true);
+                    await _updatePassword(studentId, passController.text);
+                    if (mounted) Navigator.pop(context);
                   }
                 },
-                child: _isSubmitting ? const CircularProgressIndicator() : const Text("تغيير"),
+                child: isSubmitting
+                    ? const CircularProgressIndicator()
+                    : const Text("تغيير"),
               ),
             ],
           ),
@@ -474,7 +548,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           title: const Text("تأكيد الحذف"),
           content: Text("هل أنت متأكد من حذف $studentName؟"),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+            TextButton(
+                onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () async {
@@ -489,19 +564,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  // --- أدوات بناء الواجهة المساعدة ---
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint, filled: true, fillColor: Colors.white.withOpacity(0.5),
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.white.withOpacity(0.5),
     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+    border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade200)),
   );
 
   Widget _buildLabel(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 5, top: 5),
-    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Almarai')),
+    child: Text(text,
+        style: const TextStyle(
+            fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Almarai')),
   );
 
-  // --- الواجهة الرئيسية ---
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -510,7 +589,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
           backgroundColor: Colors.white,
-          title: Text("طلاب مجموعة: ${widget.groupName}", style: const TextStyle(fontFamily: 'Almarai', fontSize: 16)),
+          title: Text("طلاب مجموعة: ${widget.groupName}",
+              style: const TextStyle(fontFamily: 'Almarai', fontSize: 16)),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         floatingActionButton: Column(
@@ -518,7 +598,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           children: [
             FloatingActionButton.small(
                 heroTag: "edit_btn",
-                onPressed: _showEditGroupDialog, // تم التعديل هنا
+                onPressed: _showEditGroupDialog,
                 backgroundColor: Colors.blue,
                 child: const Icon(Icons.edit, color: Colors.white)),
             const SizedBox(height: 12),
@@ -535,18 +615,60 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                    color: kPrimaryBlue.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Row(
-                  children: [
-                    Icon(Icons.person, color: kPrimaryBlue),
-                    const SizedBox(width: 10),
-                    Text("الشيخ: ", style: TextStyle(fontFamily: 'Almarai', fontWeight: FontWeight.bold, color: kPrimaryBlue)),
-                    Text(widget.teacherName, style: TextStyle(fontFamily: 'Almarai', color: kTextDark)),
-                  ],
+              // ─── ويدجت الشيخ مع إصلاح الـ navigation ───
+              InkWell(
+                onTap: () {
+                  debugPrint("Navigating to StaffDetails with ID: $_resolvedTeacherId");
+
+                  // ─── الحل الرئيسي: لو الـ ID صفر نوضح للمستخدم
+                  if (_resolvedTeacherId == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "لا يوجد معرّف للشيخ، تأكد من ربط الشيخ بهذه المجموعة",
+                          style: TextStyle(fontFamily: 'Almarai'),
+                        ),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    return;
+                  }
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StaffDetailsScreen(
+                        staffId: _resolvedTeacherId,
+                        staffName: displayTeacherName ?? widget.teacherName,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                      color: kPrimaryBlue.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: kPrimaryBlue.withOpacity(0.1))),
+                  child: Row(
+                    children: [
+                      Icon(Icons.person, color: kPrimaryBlue),
+                      const SizedBox(width: 10),
+                      Text("الشيخ: ",
+                          style: TextStyle(
+                              fontFamily: 'Almarai',
+                              fontWeight: FontWeight.bold,
+                              color: kPrimaryBlue)),
+                      Expanded(
+                        child: Text(
+                          displayTeacherName ?? widget.teacherName,
+                          style: TextStyle(fontFamily: 'Almarai', color: kTextDark),
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios,
+                          size: 14, color: kPrimaryBlue.withOpacity(0.5)),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -555,7 +677,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                    ],
                   ),
                   child: _students.isEmpty
                       ? const Center(child: Text("المجموعة فارغة"))
@@ -572,10 +697,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         },
                         children: [
                           TableRow(
-                            decoration: BoxDecoration(color: Colors.grey[100]),
+                            decoration:
+                            BoxDecoration(color: Colors.grey[100]),
                             children: [
                               _buildHeaderCell("#"),
-                              _buildHeaderCell("الاسم", align: TextAlign.right),
+                              _buildHeaderCell("الاسم",
+                                  align: TextAlign.right),
                               _buildHeaderCell("بيانات"),
                               _buildHeaderCell("كلمة المرور"),
                               _buildHeaderCell("حذف"),
@@ -587,15 +714,30 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                             return TableRow(
                               children: [
                                 _buildDataCell("${index + 1}"),
-                                _buildDataCell(student['name'] ?? "بدون اسم", align: TextAlign.right),
-                                _buildActionIcon(Icons.person_outline, Colors.blue, () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => StudentDetailsScreen(studentId: student['id'], studentName: student['name'] ?? "")));
+                                _buildDataCell(
+                                    student['name'] ?? "بدون اسم",
+                                    align: TextAlign.right),
+                                _buildActionIcon(
+                                    Icons.person_outline, Colors.blue, () {
+                                  Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              StudentDetailsScreen(
+                                                  studentId: student['id'],
+                                                  studentName:
+                                                  student['name'] ??
+                                                      "")));
                                 }),
-                                _buildActionIcon(Icons.lock_open, Colors.orange, () {
-                                  _showResetPasswordDialog(student['id'], student['name'] ?? "");
+                                _buildActionIcon(
+                                    Icons.lock_open, Colors.orange, () {
+                                  _showResetPasswordDialog(
+                                      student['id'], student['name'] ?? "");
                                 }),
-                                _buildActionIcon(Icons.delete_outline, Colors.red, () {
-                                  _showDeleteDialog(student['id'], student['name'] ?? "");
+                                _buildActionIcon(
+                                    Icons.delete_outline, Colors.red, () {
+                                  _showDeleteDialog(
+                                      student['id'], student['name'] ?? "");
                                 }),
                               ],
                             );
@@ -613,9 +755,32 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     );
   }
 
-  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) => Padding(padding: const EdgeInsets.all(12), child: Text(text, textAlign: align, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Almarai')));
-  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center}) => Padding(padding: const EdgeInsets.all(12), child: Text(text, textAlign: align, style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')));
-  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) => IconButton(icon: Icon(icon, color: color, size: 20), onPressed: onTap);
-  Widget _buildPopupTextField(String label, TextEditingController controller) => TextField(controller: controller, obscureText: true, textAlign: TextAlign.right, decoration: InputDecoration(labelText: label, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))));
-  void _showSnackBar(String message, Color color) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Almarai')), backgroundColor: color));
+  Widget _buildHeaderCell(String text, {TextAlign align = TextAlign.center}) => Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(text,
+          textAlign: align,
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Almarai')));
+
+  Widget _buildDataCell(String text, {TextAlign align = TextAlign.center}) => Padding(
+      padding: const EdgeInsets.all(12),
+      child:
+      Text(text, textAlign: align, style: const TextStyle(fontSize: 13, fontFamily: 'Almarai')));
+
+  Widget _buildActionIcon(IconData icon, Color color, VoidCallback onTap) =>
+      IconButton(icon: Icon(icon, color: color, size: 20), onPressed: onTap);
+
+  Widget _buildPopupTextField(String label, TextEditingController controller) =>
+      TextField(
+          controller: controller,
+          obscureText: true,
+          textAlign: TextAlign.right,
+          decoration: InputDecoration(
+              labelText: label,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))));
+
+  void _showSnackBar(String message, Color color) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(
+      content: Text(message, style: const TextStyle(fontFamily: 'Almarai')),
+      backgroundColor: color));
 }

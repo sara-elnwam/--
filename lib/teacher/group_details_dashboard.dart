@@ -6,9 +6,10 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'session_model.dart';
-// استيراد ملف الحضور مع إعطائه لقب (attendance)
+import 'package:flutter_downloader/flutter_downloader.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'student_attendance_screen.dart' as attendance;
-import 'session_model.dart'; // هذا يحتوي على الـ Student الأساسي
+import 'session_model.dart';
 import 'grading_exams_screen.dart';
 class GroupDetailsDashboard extends StatefulWidget {
   final int groupId;
@@ -26,16 +27,23 @@ class GroupDetailsDashboard extends StatefulWidget {
   State<GroupDetailsDashboard> createState() => _GroupDetailsDashboardState();
 }
 
-class _GroupDetailsDashboardState extends State<GroupDetailsDashboard> {
-  String _selectedSection = "الطلاب";
-  final List<String> _sections = ["الطلاب", "تسجيل الحضور", "تصحيح الاختبارات"];
+class _GroupDetailsDashboardState extends State<GroupDetailsDashboard>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   List<Student> _students = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _fetchStudents();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchStudents() async {
@@ -63,89 +71,151 @@ class _GroupDetailsDashboardState extends State<GroupDetailsDashboard> {
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
-          elevation: 0.5,
-          title: Text(widget.groupName, style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
-          actions: [_buildDropdown()],
+          elevation: 0,
+          title: Text(
+            widget.groupName,
+            style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(46),
+            child: Container(
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: const Color(0xFF07427C),
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: const Color(0xFF07427C),
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  fontFamily: 'Almarai',
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'Almarai',
+                ),
+                tabs: const [
+                  Tab(text: "الطلاب"),
+                  Tab(text: "تسجيل الحضور"),
+                  Tab(text: "تصحيح الاختبارات"),
+                ],
+              ),
+            ),
+          ),
         ),
-        body: _isLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFF07427C))) : _buildBodyContent(),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF07427C)))
+            : TabBarView(
+          controller: _tabController,
+          // ✅ نمنع السوايب بين التابات عشان متتعارضش مع scroll الجداول
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            // تاب 1: الطلاب
+            _buildStudentsTable(),
+
+            // تاب 2: تسجيل الحضور
+            attendance.StudentAttendanceScreen(
+              groupId: widget.groupId,
+              students: _students.map((s) => attendance.Student(id: s.id, name: s.name)).toList(),
+            ),
+
+            // تاب 3: تصحيح الاختبارات
+            GradingExamsScreen(
+              groupId: widget.groupId,
+              levelId: widget.levelId,
+              students: _students,
+            ),
+          ],
+        ),
       ),
     );
-  }
-
-  Widget _buildDropdown() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: const Color(0xFF07427C).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedSection,
-          items: _sections.map((String v) => DropdownMenuItem(value: v, child: Text(v, style: const TextStyle(fontSize: 13, color: Color(0xFF07427C), fontWeight: FontWeight.bold)))).toList(),
-          onChanged: (v) => setState(() => _selectedSection = v!),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBodyContent() {
-    if (_selectedSection == "الطلاب") {
-      return _buildStudentsTable();
-    }
-    else if (_selectedSection == "تسجيل الحضور") {
-      final attendanceStudents = _students.map((s) => attendance.Student(id: s.id, name: s.name)).toList();
-      return attendance.StudentAttendanceScreen(
-        groupId: widget.groupId,
-        students: attendanceStudents,
-      );
-    }
-// ابحثي عن هذا الجزء في ملف group_details_dashboard.dart وقومي بتعديله
-    else if (_selectedSection == "تصحيح الاختبارات") {
-      return GradingExamsScreen(
-        groupId: widget.groupId,
-        levelId: widget.levelId, // تأكدي من تمرير الـ levelId هنا
-        students: _students,
-      );
-    }
-    return Center(child: Text("شاشة $_selectedSection قيد التطوير"));
   }
   Widget _buildStudentsTable() {
     return Column(
       children: [
+        // ✅ هيدر بـ flex متطابق مع الصفوف
         Container(
           color: const Color(0xFFF8FAFC),
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          child: const Row(
-            children: [
-              Expanded(child: Center(child: Text("الإسم", style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(child: Center(child: Text("أبحاث", style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(child: Center(child: Text("سؤال اسبوعي", style: TextStyle(fontWeight: FontWeight.bold)))),
-              Expanded(child: Center(child: Text("بيانات", style: TextStyle(fontWeight: FontWeight.bold)))),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          child: Row(
+            children: const [
+              Expanded(flex: 5, child: Center(child: Text("الإسم", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+              Expanded(flex: 2, child: Center(child: Text("أبحاث", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+              Expanded(flex: 3, child: Center(child: Text("سؤال أسبوعي", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
+              Expanded(flex: 2, child: Center(child: Text("بيانات", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)))),
             ],
           ),
         ),
+        const Divider(height: 1, color: Color(0xFFE2E8F0)),
         Expanded(
           child: ListView.separated(
             itemCount: _students.length,
-            separatorBuilder: (c, i) => const Divider(height: 1),
+            separatorBuilder: (c, i) => const Divider(height: 1, color: Color(0xFFE2E8F0)),
             itemBuilder: (c, i) {
               final s = _students[i];
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
                 child: Row(
                   children: [
-                    Expanded(child: Center(child: Text(s.name, style: const TextStyle(fontSize: 13)))),
-                    Expanded(child: IconButton(
-                      icon: const Icon(Icons.search, color: Color(0xFF07427C)),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => StudentExamsScreen(studentId: s.id, studentName: s.name))),
-                    )),
-                    Expanded(child: IconButton(
-                      icon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF07427C), size: 20),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WeeklyQuestionsScreen(studentId: s.id, studentName: s.name))),
-                    )),
-                    Expanded(child: IconButton(
-                      icon: const Icon(Icons.person, color: Color(0xFF07427C), size: 20),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => StudentProfileScreen(studentId: s.id))),
-                    )),
+                    // ✅ اسم الطالب بـ flex أكبر مع overflow
+                    Expanded(
+                      flex: 5,
+                      child: Text(
+                        s.name,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 12, fontFamily: 'Almarai'),
+                      ),
+                    ),
+                  // أبحاث
+                  Expanded(
+                    flex: 2,
+                    child: Center(
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.search, color: Color(0xFF07427C), size: 20),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (c) => StudentExamsScreen(
+                                  studentId: s.id,
+                                  studentName: s.name,
+                                  groupId: widget.groupId, // تمرير القيمة من الشاشة الأب
+                                  levelId: widget.levelId, // تمرير القيمة من الشاشة الأب
+                                )
+                            )
+                        ),
+                      ),
+                    ),
+                  ),
+                    Expanded(
+                      flex: 3,
+                      child: Center(
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF07427C), size: 18),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => WeeklyQuestionsScreen(studentId: s.id, studentName: s.name))),
+                        ),
+                      ),
+                    ),
+                    // بيانات
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.person, color: Color(0xFF07427C), size: 20),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => StudentProfileScreen(studentId: s.id))),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -176,23 +246,33 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 
   String _formatDate(dynamic dateValue) {
-    if (dateValue == null || dateValue.toString().isEmpty || dateValue.toString().toLowerCase() == "null") {
-      return "--";
+    // الحصول على تاريخ اليوم وتنسيقه كافتراضي
+    final String today = DateTime.now().toString().split(" ")[0];
+
+    if (dateValue == null ||
+        dateValue.toString().isEmpty ||
+        dateValue.toString().toLowerCase() == "null") {
+      return today; // إذا كان نيل نرجع تاريخ النهاردة
     }
+
     try {
       String dateStr = dateValue.toString();
+
+      // التحقق من التواريخ غير المنطقية (مثل بداية التقويم)
       if (dateStr.startsWith("0001") || dateStr.startsWith("1970")) {
-        return "--";
+        return today;
       }
+
+      // إذا كان التاريخ يحتوي على T (صيغة ISO) نأخذ الجزء الأول فقط
       if (dateStr.contains("T")) {
         return dateStr.split("T")[0];
       }
-      return dateStr;
+
+      return dateStr; // إذا كان التاريخ سليم نرجعه كما هو
     } catch (e) {
-      return "--";
+      return today; // في حالة حدوث أي خطأ غير متوقع
     }
   }
-
   Future<void> _fetchDetails() async {
     final url = "https://nour-al-eman.runasp.net/api/Student/GetById?id=${widget.studentId}";
     try {
@@ -349,11 +429,11 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
   }
 
   Future<void> _submitGrade(int examId, String grade, String note) async {
-    const String postUrl = "https://nour-al-eman.runasp.net/api/StudentExams/AddStudentExam";
+    const String postUrl = "https://nour-al-eman.runasp.net/api/StudentCources/AddStudentExamAsync";
     try {
       final response = await http.post(
         Uri.parse(postUrl),
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", "Accept": "text/plain"},
         body: jsonEncode({
           "stId": widget.studentId,
           "examId": examId,
@@ -474,7 +554,7 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
                 itemBuilder: (context, index) {
                   final item = _questions[index];
                   final exam = item["exam"] ?? {};
-                  final bool isGraded = item["grade"] != null;
+                  final bool isGraded = item["grade"] != null || (item["note"] != null && item["note"].toString().isNotEmpty && item["note"].toString() != "null");
                   final String studentAnswer = item["note"]?.toString() ?? "--";
                   return Container(
                     margin: const EdgeInsets.only(bottom: 15),
@@ -506,11 +586,19 @@ class _WeeklyQuestionsScreenState extends State<WeeklyQuestionsScreen> {
   }
 }
 
-// --- شاشة الأبحاث المعدلة بالكامل لتطابق تصميم الويب المطلوب ---
 class StudentExamsScreen extends StatefulWidget {
   final int studentId;
   final String studentName;
-  const StudentExamsScreen({super.key, required this.studentId, required this.studentName});
+  final int groupId;
+  final int levelId;
+
+  const StudentExamsScreen({
+    super.key,
+    required this.studentId,
+    required this.studentName,
+    required this.groupId,  // أضيفي هذا
+    required this.levelId,  // أضيفي هذا
+  });
 
   @override
   State<StudentExamsScreen> createState() => _StudentExamsScreenState();
@@ -528,12 +616,23 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
 
   Future<void> _fetch() async {
     setState(() => _isLoading = true);
-    final String url = "https://nour-al-eman.runasp.net/api/Student/GetAllExamBsedOnType?StId=${widget.studentId}&TypeId=2";
+    final String url =
+        "https://nour-al-eman.runasp.net/api/Student/GetAllExamBsedOnType?StId=${widget.studentId}&TypeId=2";
     try {
       final res = await http.get(Uri.parse(url));
+      debugPrint("StudentExams API Response: ${res.body.substring(0, res.body.length > 300 ? 300 : res.body.length)}");
       if (res.statusCode == 200) {
         final decoded = json.decode(res.body);
-        setState(() => _tasks = decoded["data"] ?? []);
+        List<dynamic> rawData = decoded["data"] ?? [];
+        final normalized = rawData.map((item) {
+          return {
+            "exam": item["exam"] ?? item["ex"] ?? {},
+            "grade": item["grade"] ?? item["gr"],
+            "note": item["note"] ?? item["no"],
+            "studentId": item["studentId"] ?? item["stId"] ?? item["st"],
+          };
+        }).toList();
+        setState(() => _tasks = normalized);
       }
     } catch (e) {
       debugPrint("Fetch Error: $e");
@@ -543,11 +642,12 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
   }
 
   Future<void> _submitGrade(int examId, String grade, String note) async {
-    const String postUrl = "https://nour-al-eman.runasp.net/api/StudentExams/AddStudentExam";
+    const String postUrl =
+        "https://nour-al-eman.runasp.net/api/StudentCources/AddStudentExamAsync";
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse(postUrl),
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", "Accept": "text/plain"},
         body: jsonEncode({
           "stId": widget.studentId,
           "examId": examId,
@@ -555,27 +655,43 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
           "note": note,
         }),
       );
-      _fetch();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("✅ تم حفظ التقييم"), backgroundColor: Colors.green));
+          _fetch();
+        }
+      }
     } catch (e) {
       debugPrint("Error: $e");
     }
   }
   void _showGradingDialog(dynamic item, bool isGraded) {
-    final TextEditingController noteController = TextEditingController(text: item["note"]?.toString() == "null" ? "" : (item["note"] ?? ""));
-    final TextEditingController gradeController = TextEditingController(text: item["grade"]?.toString() == "null" ? "" : (item["grade"]?.toString() ?? ""));
-    final exam = item["exam"] ?? {};
+    final exam = item["exam"] ?? item["ex"] ?? {};
     final int examId = exam["id"] ?? 0;
+
+    // حل مشكلة "null" - نبحث عن القيمة ونحولها لنص فارغ إذا كانت نيل
+    var rawGrade = item["grade"] ?? item["gr"] ??
+        (item["studentExams"] != null && item["studentExams"].isNotEmpty ? item["studentExams"][0]["grade"] : "");
+
+    var rawNote = item["note"] ?? item["no"] ??
+        (item["studentExams"] != null && item["studentExams"].isNotEmpty ? item["studentExams"][0]["note"] : "");
+
+    final TextEditingController gradeController = TextEditingController(
+        text: (rawGrade == null || rawGrade.toString() == "null") ? "" : rawGrade.toString());
+    final TextEditingController noteController = TextEditingController(
+        text: (rawNote == null || rawNote.toString() == "null") ? "" : rawNote.toString());
 
     showDialog(
       context: context,
-      builder: (context) => Directionality(
+      builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: Dialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: SingleChildScrollView(
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.all(24),
-              width: MediaQuery.of(context).size.width * 0.9,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,63 +700,50 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isGraded ? "التقييم" : "اضافة تقييم",
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF07427C))),
-                      IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(4)),
-                              child: const Icon(Icons.close, size: 16, color: Colors.black))
-                      ),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF07427C), fontFamily: "Almarai")),
+                      IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
                     ],
                   ),
-                  const SizedBox(height: 15),
-                  const Text("التعليق", style: TextStyle(fontSize: 16, color: Color(0xFF07427C), fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 20),
+                  const Text("التعليق", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: "Almarai")),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: noteController,
-                    maxLines: 4,
-                    textAlign: TextAlign.right,
+                    maxLines: 3,
+                    readOnly: isGraded,
                     decoration: InputDecoration(
-                      hintText: "اكتب هنا ...",
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      hintText: "اكتب هنا...",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      filled: isGraded,
+                      fillColor: isGraded ? Colors.grey.shade100 : null,
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text.rich(
-                    TextSpan(
-                      text: isGraded ? "نقاط الطالب" : "ادخل نقاط الطالب هنا",
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
-                      children: const [TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontSize: 16))],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                  const Text("نقاط الطالب *", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: "Almarai")),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: gradeController,
                     keyboardType: TextInputType.number,
-                    textAlign: TextAlign.right,
+                    readOnly: isGraded,
                     decoration: InputDecoration(
-                      hintText: "ادخل نقاط الطالب هنا",
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      hintText: "ادخل النقاط",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      filled: isGraded,
+                      fillColor: isGraded ? Colors.grey.shade100 : null,
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 25),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD17820),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD17820), padding: const EdgeInsets.symmetric(vertical: 15)),
                       onPressed: () {
-                        _submitGrade(examId, gradeController.text, noteController.text);
-                        Navigator.pop(context);
+                        if (!isGraded) {
+                          _submitGrade(examId, gradeController.text, noteController.text);
+                        }
+                        Navigator.pop(ctx);
                       },
-                      child: Text(isGraded ? "إغلاق" : "إضافة",
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(isGraded ? "إغلاق" : "حفظ التقييم", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   )
                 ],
@@ -651,62 +754,42 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
       ),
     );
   }
-
-  // استبدلي دالة _startDownload القديمة بهذه الدالة المعدلة والذكية
-  Future<void> _startDownload(String? relativeUrl, String fileName) async {
-    // 1. التحقق من وجود رابط
-    if (relativeUrl == null || relativeUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ لا يوجد ملف مرفوع لهذا البحث")));
-      return;
-    }
+  Future<void> _startDownload(String? relativeUrl, String examName) async {
+    // الرابط الذي يعمل
+    String url = "https://nour-al-eman.runasp.net/api/StudentCources/DownloadLatest?levelId=${widget.levelId}&typeId=2";
 
     try {
-      // 2. تكوين الرابط الصحيح (دمج الدومين مع المسار)
-      String cleanPath = relativeUrl.replaceAll(r'\', '/').trim();
-      if (!cleanPath.startsWith('/')) cleanPath = '/$cleanPath';
+      final directory = Directory('/storage/emulated/0/Download');
+      if (!await directory.exists()) await directory.create(recursive: true);
 
-      // ملاحظة: جربي هذا الرابط أولاً، وإذا أعطى 404 يبقى الملف مش موجود على السيرفر فعلياً
-      String finalUrl = "https://nour-al-eman.runasp.net$cleanPath";
+      // بدلاً من pdf، سنحاول حفظه كصورة لأن اللوج أكد أنها image/png
+      // أو الأفضل: تسميته بدون امتداد ثابت إذا كنتِ ستستخدمين open_filex
+      String finalFileName = "${examName.replaceAll(' ', '_')}.png";
 
-      // فكرة ذكية للتجربة: لو عايزة تتأكدي إن الكود شغال، فكي التعليق عن السطر اللي جاي:
-      // finalUrl = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
-
-      // 3. تحديد مسار الحفظ (مجلد الـ Download العام)
-      String savePath = "/storage/emulated/0/Download/$fileName";
-
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⬇️ جاري بدء التحميل...")));
-
-      // 4. تنفيذ عملية التحميل
-      await Dio().download(
-        finalUrl,
-        savePath,
-        onReceiveProgress: (received, total) {
-          if (total != -1) {
-            debugPrint("Progress: ${(received / total * 100).toStringAsFixed(0)}%");
-          }
-        },
+      await FlutterDownloader.enqueue(
+        url: url,
+        savedDir: directory.path,
+        fileName: finalFileName,
+        showNotification: true,
+        openFileFromNotification: true,
+        saveInPublicStorage: true,
+        headers: {"Accept": "*/*"},
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("✅ تم تحميل الملف في مجلد Download"),
-          backgroundColor: Colors.green,
-          action: SnackBarAction(
-              label: "فتح الملف",
-              textColor: Colors.white,
-              onPressed: () => OpenFilex.open(savePath)
-          ),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("⬇️ جاري التحميل...", style: TextStyle(fontFamily: "Almarai")),
+              backgroundColor: Colors.green, // اللون الأخضر كما طلبتِ
+              duration: Duration(seconds: 1),
+            ));
       }
     } catch (e) {
       debugPrint("Download Error: $e");
-      if (mounted) {
-        // لو الخطأ 404 يبقى العيب من السيرفر مية مية
-        String msg = "❌ فشل التحميل: الملف غير موجود على السيرفر (404)";
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
-      }
     }
   }
+  @override
+  @override
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -714,92 +797,102 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
-          leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
-          title: const Text("ابحاث الطالب", style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+          title: Text("أبحاث: ${widget.studentName}",
+              style: const TextStyle(fontFamily: "Almarai", fontSize: 16)),
+          centerTitle: true,
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
+        // التحقق هنا: إذا كانت القائمة فارغة تظهر الرسالة المطلوبة
             : _tasks.isEmpty
-            ? const Center(child: Text("لا توجد أبحاث لهذا الطالب"))
-            : Column(
-          children: [
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                itemCount: _tasks.length,
-                itemBuilder: (context, index) {
-                  final item = _tasks[index];
-                  final exam = item["exam"] ?? {};
-                  final bool isGraded = item["grade"] != null;
+            ? const Center(
+          child: Text(
+            "لا يوجد بيانات بعد",
+            style: TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              fontFamily: "Almarai",
+            ),
+          ),
+        )
+            : ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _tasks.length,
+          itemBuilder: (context, index) {
+            final item = _tasks[index];
+            final exam = item["exam"] ?? {};
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 15),
-                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 15),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: isGraded ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
-                          width: 1.5
+            var gradeVal = item["grade"] ?? (item["studentExams"] != null && item["studentExams"].isNotEmpty
+                ? item["studentExams"][0]["grade"]
+                : null);
+
+            final bool isGraded = gradeVal != null && gradeVal.toString() != "null";
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isGraded ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+                  width: 1.5,
+                ),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+                ],
+              ),
+              child: Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        onTap: () => _startDownload(exam["url"], exam["name"] ?? "research"),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.download_rounded, color: Color(0xFFD17820), size: 18),
+                            SizedBox(width: 4),
+                            Text("تحميل", style: TextStyle(color: Color(0xFFD17820), fontWeight: FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Row(
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () => _showGradingDialog(item, isGraded),
+                        child: Text(
+                          isGraded ? "رؤية التقييم" : "تقييم البحث",
+                          style: const TextStyle(color: Color(0xFF07427C), fontSize: 12, decoration: TextDecoration.underline),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // 1. زر التقييم (أقصى اليمين في RTL)
-                        InkWell(
-                          onTap: () => _showGradingDialog(item, isGraded),
-                          child: Text(
-                            isGraded ? "رؤية التقييم" : "تقييم البحث",
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF07427C),
-                                decoration: TextDecoration.underline
-                            ),
-                          ),
+                        Text(
+                          "الإسم: ${exam["name"] ?? "--"}",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          textAlign: TextAlign.right,
                         ),
-                        const Spacer(),
-                        // 2. أيقونة التحميل
-                        InkWell(
-                          onTap: () => _startDownload(exam["url"], "${exam["name"] ?? "research"}.pdf"),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.download_sharp, color: Color(0xFFD17820), size: 20),
-                              const SizedBox(width: 4),
-                              const Text("تحميل", style: TextStyle(color: Color(0xFFD17820), fontSize: 13, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                        const Spacer(),
-                        // 3. الوصف
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            "الوصف: ${exam["description"] ?? "--"}",
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Spacer(),
-                        // 4. الاسم (أقصى اليسار في RTL)
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            "الإسم: ${exam["name"] ?? "--"}",
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                            textAlign: TextAlign.left,
-                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "الوصف: ${exam["description"] ?? "--"}",
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          textAlign: TextAlign.right,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

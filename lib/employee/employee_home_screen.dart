@@ -15,7 +15,8 @@ import 'courses_screen/courses_screen.dart'; // تأكد من المسار ال�
 import 'branches_screen/branches_screen.dart'; // تأكد من المسار الصحيح
 // هذا هو المسار الصحيح بناءً على هيكلة المجلدات عندك
 import 'employee/employees_screen.dart';
-
+import 'employee_attendance_screen.dart';
+import 'employee_attendance_history_screen.dart';
 import 'levels_screen/levels_screen.dart';
 
 
@@ -37,6 +38,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
   bool _isLoading = true;
   EmployeeData? employeeData;
   Map<String, dynamic>? _rawResponse;
+  // مفتاح لإعادة بناء شاشة السجل كل مرة تُفتح
+  Key _historyKey = UniqueKey();
 
   @override
   void initState() {
@@ -84,10 +87,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     setState(() {
       _currentIndex = index;
       _currentTitle = title;
+      // إذا فتح المستخدم شاشة السجل، نجدد الـ key عشان تعمل refresh تلقائي
+      if (index == 2) {
+        _historyKey = UniqueKey();
+      }
     });
-
-    // إذا كان المستخدم يفتح شاشة السجل (رقم 2)، اطلب تحديث البيانات
-    // ملاحظة: ستحتاج لاستخدام GlobalKey أو ChangeNotifier لإخبار شاشة السجل بالتحديث
     Navigator.pop(context);
   }
 
@@ -113,10 +117,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         IndexedStack(
           index: _currentIndex,
           children: [
-            EmployeeAttendanceScreen(),          // 0
-            _buildPersonalDataContent(),         // 1
-            EmployeeAttendanceHistoryScreen(),   // 2
-            StudentsScreen(),                    // 3
+            MainAttendanceScreen(),                              // 0
+            _buildPersonalDataContent(),                         // 1
+            EmployeeAttendanceHistoryScreen(key: _historyKey),   // 2 - بيتجدد كل مرة تُفتح
+            StudentsScreen(),                                    // 3
             AllEmployeesScreen(),                // 4
             EmployeesScreen(),                   // 5 <--- تم الربط هنا (صفحة المعلمين)
             LevelsScreen(),                      // 6

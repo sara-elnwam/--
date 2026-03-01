@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+// --- التعديل هنا ---
+// إذا كان الملفان في نفس المجلد استخدم هذا السطر:
+import 'curriculum_model.dart';
+
+// إذا كان ملف الموديل في مجلد مختلف (مثلاً مجلد models)، استخدم المسار الكامل:
+// import 'package:project1/models/curriculum_model.dart';
+// ------------------
 
 class CurriculumScreen extends StatelessWidget {
   final Color primaryBlue = const Color(0xFF1976D2);
@@ -16,69 +25,44 @@ class CurriculumScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // تغليف الكود بـ Directionality لضمان ظهور التصميم بشكل صحيح من اليمين لليسار
+    // بدون Scaffold أو AppBar — التحكم في الـ AppBar عند الـ TeacherHomeScreen
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        // إضافة AppBar لكي تظهر الشاشة بشكل احترافي مع زر رجوع تلقائي
-        appBar: AppBar(
-          title: const Text(
-            "المنهج / المقرر",
-            style: TextStyle(fontFamily: 'Almarai', fontSize: 18, fontWeight: FontWeight.bold),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Text(
+              "دروس مصاحبة",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Almarai', color: Color(0xFF2E3542)),
+              textAlign: TextAlign.right,
+            ),
           ),
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF2E3542),
-        ),
-        backgroundColor: const Color(0xFFF9FAFB), // لون خلفية مريح للعين
-        body: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 15,
+                mainAxisSpacing: 15,
+                childAspectRatio: 1.1,
               ),
-              child: const Text(
-                "دروس مصاحبة",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Almarai',
-                  color: Color(0xFF2E3542),
-                ),
-                textAlign: TextAlign.right,
-              ),
+              itemCount: menuItems.length,
+              itemBuilder: (context, index) => _buildMenuCard(context, menuItems[index]),
             ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
-                  childAspectRatio: 1.1,
-                ),
-                itemCount: menuItems.length,
-                itemBuilder: (context, index) => _buildMenuCard(context, menuItems[index]),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
   Widget _buildMenuCard(BuildContext context, Map<String, dynamic> item) {
     return InkWell(
       onTap: () {
@@ -96,7 +80,6 @@ class CurriculumScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Column(
@@ -132,7 +115,32 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
   String? _filePath;
   bool _isMandatory = false;
   bool _isUploading = false;
-  String? _selectedLevelValue;
+
+  List<LevelData> _levels = [];
+  LevelData? _selectedLevel;
+  bool _isLoadingLevels = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLevels();
+  }
+
+  Future<void> _fetchLevels() async {
+    try {
+      final response = await http.get(Uri.parse('https://nour-al-eman.runasp.net/api/Level/GetAll'));
+      if (response.statusCode == 200) {
+        final data = CurriculumResponse.fromJson(json.decode(response.body));
+        setState(() {
+          _levels = data.data ?? [];
+          _isLoadingLevels = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isLoadingLevels = false);
+      print("Error fetching levels: $e");
+    }
+  }
 
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles();
@@ -144,54 +152,36 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
     }
   }
 
-
-
-
-
   Future<void> _submitData() async {
-    if (_nameController.text.isEmpty || _filePath == null || _selectedLevelValue == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("برجاء إكمال البيانات")));
+    if (_nameController.text.isEmpty || _filePath == null || _selectedLevel == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("برجاء إكمال البيانات واختيار المستوى")));
       return;
     }
 
     setState(() => _isUploading = true);
 
     try {
-      // 1. تغيير الرابط إلى Save وتغيير النوع إلى POST
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('https://nour-al-eman.runasp.net/api/StudentCources/Save'),
       );
 
-      // 2. تعبئة الحقول (تأكدي من مطابقة الأحرف الكبيرة والصغيرة حسب السيرفر)
       request.fields['Name'] = _nameController.text;
       request.fields['Description'] = _descController.text;
-
-      int levelId = 1;
-      if (_selectedLevelValue == "المستوى الثاني") levelId = 2;
-      else if (_selectedLevelValue == "المستوى الثالث") levelId = 3;
-      else if (_selectedLevelValue == "المستوى الرابع") levelId = 4;
-
-      request.fields['LevelId'] = levelId.toString();
+      request.fields['LevelId'] = _selectedLevel!.id.toString();
       request.fields['TypeId'] = widget.typeId.toString();
       request.fields['Mandatory'] = _isMandatory.toString();
 
-      // 3. إضافة الملف - تأكدي من اسم الحقل 'file' أو 'File' حسب متطلبات السيرفر
       request.files.add(await http.MultipartFile.fromPath('file', _filePath!));
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
-      print("📡 كود الاستجابة: ${response.statusCode}");
-      print("📥 رد السيرفر: ${response.body}");
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تمت الإضافة بنجاح ✅")));
         Navigator.pop(context);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("خطأ ${response.statusCode}: يرجى التحقق من صحة البيانات المرسلة"))
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ ${response.statusCode}: تحقق من البيانات")));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ اتصال: $e")));
@@ -199,6 +189,7 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
       if (mounted) setState(() => _isUploading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -215,7 +206,9 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        body: SingleChildScrollView(
+        body: _isLoadingLevels
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,7 +220,7 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
               _buildTextField(_descController, "ادخل تفاصيل ${widget.title}", maxLines: 3),
               const SizedBox(height: 20),
               _buildLabel("المستويات*"),
-              _buildDropdown(),
+              _buildDynamicDropdown(),
               const SizedBox(height: 20),
               _buildLabel("الملف*"),
               _buildFilePicker(),
@@ -280,18 +273,21 @@ class _AddCurriculumItemScreenState extends State<AddCurriculumItemScreen> {
     ),
   );
 
-  Widget _buildDropdown() => Container(
+  Widget _buildDynamicDropdown() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
     child: DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
+      child: DropdownButton<LevelData>(
         isExpanded: true,
-        value: _selectedLevelValue,
-        hint: const Text("اختار المستويات", style: TextStyle(fontSize: 14, fontFamily: 'Almarai')),
-        items: ["المستوى الاول", "المستوى الثاني", "المستوى الثالث", "المستوى الرابع"].map((String value) {
-          return DropdownMenuItem<String>(value: value, child: Text(value));
+        value: _selectedLevel,
+        hint: const Text("اختار المستوى", style: TextStyle(fontSize: 14, fontFamily: 'Almarai')),
+        items: _levels.map((LevelData level) {
+          return DropdownMenuItem<LevelData>(
+              value: level,
+              child: Text(level.name ?? "بدون اسم")
+          );
         }).toList(),
-        onChanged: (val) => setState(() => _selectedLevelValue = val),
+        onChanged: (val) => setState(() => _selectedLevel = val),
       ),
     ),
   );

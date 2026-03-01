@@ -16,13 +16,20 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
   List<dynamic> branchesData = [];
   bool isLoading = true;
+  final ScrollController _scrollController = ScrollController();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
+
+  // 4 نقاط إحداثيات (كل نقطة = Lat + Long)
   final TextEditingController lat1Controller = TextEditingController();
   final TextEditingController long1Controller = TextEditingController();
   final TextEditingController lat2Controller = TextEditingController();
   final TextEditingController long2Controller = TextEditingController();
+  final TextEditingController lat3Controller = TextEditingController();
+  final TextEditingController long3Controller = TextEditingController();
+  final TextEditingController lat4Controller = TextEditingController();
+  final TextEditingController long4Controller = TextEditingController();
 
   @override
   void initState() {
@@ -30,7 +37,12 @@ class _BranchesScreenState extends State<BranchesScreen> {
     fetchBranches();
   }
 
-  // 1. دالة جلب البيانات مع تجنب التكرار
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> fetchBranches() async {
     if (!mounted) return;
     setState(() => isLoading = true);
@@ -54,12 +66,16 @@ class _BranchesScreenState extends State<BranchesScreen> {
     }
   }
 
-  // 2. دالة الإضافة والتعديل مع تأخير التحديث لضمان مزامنة السيرفر
   Future<void> submitBranch({required bool isEdit, int? id}) async {
     final String endpoint = isEdit ? "Update" : "Save";
     final String url = "https://nour-al-eman.runasp.net/api/Locations/$endpoint";
 
-    String coords = "${lat1Controller.text};${long1Controller.text};${lat2Controller.text};${long2Controller.text};null;null;null;null";
+    // تجميع الـ 8 قيم (4 نقاط × Lat/Long)
+    String coords =
+        "${lat1Controller.text};${long1Controller.text};"
+        "${lat2Controller.text};${long2Controller.text};"
+        "${lat3Controller.text};${long3Controller.text};"
+        "${lat4Controller.text};${long4Controller.text}";
 
     try {
       final Map<String, dynamic> bodyData = {
@@ -71,15 +87,17 @@ class _BranchesScreenState extends State<BranchesScreen> {
       if (isEdit) bodyData["id"] = id;
 
       final response = isEdit
-          ? await http.put(Uri.parse(url), headers: {"Content-Type": "application/json"}, body: json.encode(bodyData))
-          : await http.post(Uri.parse(url), headers: {"Content-Type": "application/json"}, body: json.encode(bodyData));
+          ? await http.put(Uri.parse(url),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode(bodyData))
+          : await http.post(Uri.parse(url),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode(bodyData));
 
       if (response.statusCode == 200) {
         if (mounted) {
           Navigator.pop(context);
           _showSnackBar("تمت العملية بنجاح", Colors.green);
-
-          // تأخير بسيط قبل الجلب لضمان استقرار قاعدة البيانات في السيرفر
           Future.delayed(const Duration(milliseconds: 500), () {
             fetchBranches();
           });
@@ -92,7 +110,6 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
   Future<void> deleteBranch(dynamic id) async {
     final backup = List.from(branchesData);
-
     setState(() {
       branchesData.removeWhere((item) => item['id'].toString() == id.toString());
     });
@@ -133,11 +150,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: kBgColor,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
-          title: const Text("الفروع", style: TextStyle(color: Color(0xFF2E3542), fontWeight: FontWeight.bold, fontSize: 18)),
-        ),
+
         floatingActionButton: FloatingActionButton(
           onPressed: () => _showAddEditModal(context, isEdit: false),
           backgroundColor: kPrimaryOrange,
@@ -157,30 +170,25 @@ class _BranchesScreenState extends State<BranchesScreen> {
   Widget _buildMainContent() {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Icon(Icons.location_on_outlined, color: kPrimaryOrange, size: 20),
-              const SizedBox(width: 8),
-              const Text("قائمة فروع المدرسة", style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ),
         Expanded(
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 600,
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: branchesData.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) return _buildHeader();
-                  return _buildRow(branchesData[index - 1]);
-                },
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: 600,
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.only(
+                      left: 12, right: 12, top: 0, bottom: 80),
+                  itemCount: branchesData.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) return _buildHeader();
+                    return _buildRow(branchesData[index - 1]);
+                  },
+                ),
               ),
             ),
           ),
@@ -192,13 +200,32 @@ class _BranchesScreenState extends State<BranchesScreen> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+      decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(8))),
       child: const Row(
         children: [
-          Expanded(flex: 3, child: Center(child: Text("اسم الفرع", style: TextStyle(fontWeight: FontWeight.bold)))),
-          Expanded(flex: 4, child: Center(child: Text("العنوان", style: TextStyle(fontWeight: FontWeight.bold)))),
-          Expanded(flex: 1, child: Center(child: Text("تعديل", style: TextStyle(fontWeight: FontWeight.bold)))),
-          Expanded(flex: 1, child: Center(child: Text("حذف", style: TextStyle(fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 3,
+              child: Center(
+                  child: Text("اسم الفرع",
+                      style: TextStyle(fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 4,
+              child: Center(
+                  child: Text("العنوان",
+                      style: TextStyle(fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 1,
+              child: Center(
+                  child: Text("تعديل",
+                      style: TextStyle(fontWeight: FontWeight.bold)))),
+          Expanded(
+              flex: 1,
+              child: Center(
+                  child: Text("حذف",
+                      style: TextStyle(fontWeight: FontWeight.bold)))),
         ],
       ),
     );
@@ -207,30 +234,54 @@ class _BranchesScreenState extends State<BranchesScreen> {
   Widget _buildRow(dynamic item) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(item['name'] ?? "", textAlign: TextAlign.center)),
-          Expanded(flex: 4, child: Text(item['address'] ?? "", textAlign: TextAlign.center, maxLines: 2)),
+          Expanded(
+              flex: 3,
+              child:
+              Text(item['name'] ?? "", textAlign: TextAlign.center)),
+          Expanded(
+              flex: 4,
+              child: Text(item['address'] ?? "",
+                  textAlign: TextAlign.center, maxLines: 2)),
           Expanded(
             flex: 1,
             child: InkWell(
               onTap: () {
-                List<String> parts = (item['coordinates'] ?? "").toString().split(';');
-                lat1Controller.text = parts.isNotEmpty ? parts[0] : "";
-                long1Controller.text = parts.length > 1 ? parts[1] : "";
-                lat2Controller.text = parts.length > 2 ? parts[2] : "";
-                long2Controller.text = parts.length > 3 ? parts[3] : "";
+                // تعبئة الـ 8 حقول من الـ coordinates المخزنة
+                List<String> parts =
+                (item['coordinates'] ?? "").toString().split(';');
+                lat1Controller.text =
+                parts.isNotEmpty ? parts[0] : "";
+                long1Controller.text =
+                parts.length > 1 ? parts[1] : "";
+                lat2Controller.text =
+                parts.length > 2 ? parts[2] : "";
+                long2Controller.text =
+                parts.length > 3 ? parts[3] : "";
+                lat3Controller.text =
+                parts.length > 4 ? parts[4] : "";
+                long3Controller.text =
+                parts.length > 5 ? parts[5] : "";
+                lat4Controller.text =
+                parts.length > 6 ? parts[6] : "";
+                long4Controller.text =
+                parts.length > 7 ? parts[7] : "";
                 _showAddEditModal(context, isEdit: true, data: item);
               },
-              child: Icon(Icons.edit_note, color: kPrimaryOrange, size: 26),
+              child:
+              Icon(Icons.edit_note, color: kPrimaryOrange, size: 26),
             ),
           ),
           Expanded(
             flex: 1,
             child: InkWell(
               onTap: () => _showDeleteDialog(context, item['id']),
-              child: const Icon(Icons.delete, color: Colors.red, size: 22),
+              child:
+              const Icon(Icons.delete, color: Colors.red, size: 22),
             ),
           ),
         ],
@@ -238,45 +289,85 @@ class _BranchesScreenState extends State<BranchesScreen> {
     );
   }
 
-  void _showAddEditModal(BuildContext context, {required bool isEdit, dynamic data}) {
+  void _showAddEditModal(BuildContext context,
+      {required bool isEdit, dynamic data}) {
     if (!isEdit) {
-      nameController.clear(); addressController.clear();
-      lat1Controller.clear(); long1Controller.clear();
-      lat2Controller.clear(); long2Controller.clear();
+      nameController.clear();
+      addressController.clear();
+      lat1Controller.clear();
+      long1Controller.clear();
+      lat2Controller.clear();
+      long2Controller.clear();
+      lat3Controller.clear();
+      long3Controller.clear();
+      lat4Controller.clear();
+      long4Controller.clear();
     } else {
       nameController.text = data['name'] ?? "";
       addressController.text = data['address'] ?? "";
+      // الإحداثيات اتعبت في الـ onTap بتاع زر التعديل
     }
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(isEdit ? "تعديل بيانات الفرع" : "إضافة فرع جديد", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text(isEdit ? "تعديل بيانات الفرع" : "إضافة فرع جديد",
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 20),
               _buildInput("اسم الفرع*", nameController),
               _buildInput("عنوان الفرع*", addressController),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(child: _buildInput("Lat 1", lat1Controller)),
-                  const SizedBox(width: 5),
-                  Expanded(child: _buildInput("Long 1", long1Controller)),
-                ],
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text("الإحداثيات (4 نقاط)",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
+              _buildCoordRow("الأولى", lat1Controller, long1Controller),
+              _buildCoordRow("الثانية", lat2Controller, long2Controller),
+              _buildCoordRow("الثالثة", lat3Controller, long3Controller),
+              _buildCoordRow("الرابعة", lat4Controller, long4Controller),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () => submitBranch(isEdit: isEdit, id: isEdit ? data['id'] : null),
-                style: ElevatedButton.styleFrom(backgroundColor: kPrimaryOrange, minimumSize: const Size(double.infinity, 45)),
-                child: const Text("حفظ", style: TextStyle(color: Colors.white)),
+                onPressed: () => submitBranch(
+                    isEdit: isEdit, id: isEdit ? data['id'] : null),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryOrange,
+                    minimumSize: const Size(double.infinity, 45)),
+                child: const Text("حفظ",
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCoordRow(String label, TextEditingController latCtrl,
+      TextEditingController longCtrl) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("النقطة $label:",
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(child: _buildInput("Lat", latCtrl)),
+              const SizedBox(width: 6),
+              Expanded(child: _buildInput("Long", longCtrl)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -286,10 +377,16 @@ class _BranchesScreenState extends State<BranchesScreen> {
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: controller,
+        keyboardType:
+        const TextInputType.numberWithOptions(decimal: true, signed: true),
         decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          labelStyle: const TextStyle(fontSize: 13),
+          border:
+          OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           isDense: true,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         ),
       ),
     );
@@ -302,11 +399,15 @@ class _BranchesScreenState extends State<BranchesScreen> {
         title: const Text("تأكيد الحذف"),
         content: const Text("هل تريد حذف هذا الفرع نهائياً؟"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("إلغاء")),
           ElevatedButton(
             onPressed: () => deleteBranch(id),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("حذف", style: TextStyle(color: Colors.white)),
+            style:
+            ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child:
+            const Text("حذف", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

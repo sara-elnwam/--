@@ -64,8 +64,9 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> with Single
   }
 
   String _getDayName(int day) {
+    // السيرفر بيبدأ من 1 = السبت (مطابق للـ Web)
     const days = {
-      1: "الإثنين", 2: "الثلاثاء", 3: "الأربعاء", 4: "الخميس", 5: "الجمعة", 6: "السبت", 7: "الأحد",
+      1: "السبت", 2: "الأحد", 3: "الإثنين", 4: "الثلاثاء", 5: "الأربعاء", 6: "الخميس", 7: "الجمعة",
     };
     return days[day] ?? "";
   }

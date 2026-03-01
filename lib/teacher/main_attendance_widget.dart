@@ -111,31 +111,80 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       String empId = prefs.getString('user_id') ?? "";
+      String todayDate = intl.DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // ── أولاً: نقرأ الحالة المحفوظة محلياً (فورية وموثوقة) ──
+      final String? savedDate = prefs.getString('attendance_date_$empId');
+      final String? savedType = prefs.getString('attendance_checktype_$empId');
+      final String? savedLocation = prefs.getString('attendance_location_$empId');
+
+      if (savedDate == todayDate && savedType == "Out") {
+        // سجل حضور اليوم ولم يسجل انصراف → نعرض زر الانصراف فوراً
+        if (mounted) setState(() {
+          _checkType = "Out";
+          _attendanceDone = true;
+          _selectedLocationName = savedLocation;
+          _isInRange = true;
+          _isLoadingStatus = false;
+        });
+        // نتحقق من السيرفر في الخلفية بدون انتظار
+        _verifyStatusFromServer(empId, todayDate);
+        return;
+      } else if (savedDate == todayDate && savedType == "Done") {
+        // سجل حضور وانصراف اليوم
+        if (mounted) setState(() {
+          _checkType = "In";
+          _attendanceDone = false;
+          _isLoadingStatus = false;
+        });
+        return;
+      }
+
+      // ── ثانياً: لو مفيش بيانات محلية، نسأل السيرفر ──
+      await _verifyStatusFromServer(empId, todayDate);
+
+    } catch (e) {
+      debugPrint("Error checking status: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingStatus = false);
+    }
+  }
+
+  // التحقق من السيرفر في الخلفية بدون تعطيل الشاشة
+  Future<void> _verifyStatusFromServer(String empId, String todayDate) async {
+    try {
       final url = 'https://nour-al-eman.runasp.net/api/Locations/GetAllEmployeeAttendanceById?EmpId=$empId';
       final response = await http.get(Uri.parse(url));
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         List<dynamic> logs = data['data'] ?? [];
         if (logs.isNotEmpty) {
           var lastLog = logs.first;
-          String todayDate = intl.DateFormat('yyyy-MM-dd').format(DateTime.now());
-          if (lastLog['date'].contains(todayDate)) {
-            if (lastLog['checkOutTime'] == null || lastLog['checkOutTime'] == "--") {
-              setState(() {
+          if (lastLog['date'] != null && lastLog['date'].toString().contains(todayDate)) {
+            final bool hasCheckOut = lastLog['checkOutTime'] != null &&
+                lastLog['checkOutTime'].toString().isNotEmpty &&
+                lastLog['checkOutTime'].toString() != "--";
+            final prefs = await SharedPreferences.getInstance();
+            if (!hasCheckOut) {
+              await prefs.setString('attendance_date_$empId', todayDate);
+              await prefs.setString('attendance_checktype_$empId', "Out");
+              await prefs.setString('attendance_location_$empId', lastLog['locationName'] ?? "");
+              if (mounted) setState(() {
                 _checkType = "Out";
                 _attendanceDone = true;
                 _selectedLocationName = lastLog['locationName'];
                 _isInRange = true;
               });
+            } else {
+              await prefs.setString('attendance_date_$empId', todayDate);
+              await prefs.setString('attendance_checktype_$empId', "Done");
+              if (mounted) setState(() { _checkType = "In"; _attendanceDone = false; });
             }
           }
         }
       }
     } catch (e) {
-      print("Error checking status: $e");
-    } finally {
-      setState(() => _isLoadingStatus = false);
+      debugPrint("Server verify error: $e");
     }
   }
 
@@ -239,22 +288,32 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
       final prefs = await SharedPreferences.getInstance();
       String? rawId = prefs.getString('user_id');
 
-      if (rawId == null || rawId == "0") {
+      if (rawId == null || rawId.isEmpty || rawId == "0") {
         _showSnackBar("خطأ: كود المستخدم غير صالح", Colors.red);
         return;
       }
 
-      // تجهيز البيانات بالصيغة التي طلبها السيرفر في آخر Error Log
+      if (_myPosition == null) {
+        _showSnackBar("خطأ: لم يتم تحديد موقعك بعد", Colors.red);
+        return;
+      }
+
       final Map<String, dynamic> attendanceData = {
-        "UserId": rawId.toString(), // إرسال المعرف كنص "5"
-        "userLocation": _selectedOffice?['id'], // إرسال المعرف كرقم (int)
-        "CheckType": _checkType,
-        "HisCoordinate": { // إرسال الإحداثيات كـ Object وليس String
-          "lat": _myPosition?.latitude,
-          "lng": _myPosition?.longitude,
+        "id": 0,
+        "userId": rawId,                      // ✅ String كما يطلب السيرفر
+        "checkType": _checkType,
+        "locId": _selectedOffice?['id'],
+        "hisCoordinate": {
+          "latitude": _myPosition!.latitude,
+          "longitude": _myPosition!.longitude,
         },
-        "Date": DateTime.now().toIso8601String(),
+        "userLocation": {                     // ✅ field مطلوب من السيرفر
+          "latitude": _myPosition!.latitude,
+          "longitude": _myPosition!.longitude,
+        },
       };
+
+      print("ATTENDANCE REQUEST: ${json.encode(attendanceData)}");
 
       final response = await http.post(
         Uri.parse('https://nour-al-eman.runasp.net/api/Locations/employee-attendance'),
@@ -262,8 +321,132 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
         body: json.encode(attendanceData),
       );
 
+      print("ATTENDANCE STATUS: ${response.statusCode}");
+      print("ATTENDANCE BODY: ${response.body}");
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        _showSnackBar("تم تسجيل ${_checkType == "In" ? "الحضور" : "الانصراف"} بنجاح", Colors.green);
+        final responseData = json.decode(response.body);
+        final dynamic error = responseData['error'];
+
+        if (error != null && error.toString().isNotEmpty && error.toString() != "null") {
+          _showSnackBar("فشل: $error", Colors.red);
+          return;
+        }
+
+        // ✅ احفظ البصمة محلياً كـ backup
+        try {
+          final prefs2 = await SharedPreferences.getInstance();
+          final loginDataStr2 = prefs2.getString('loginData');
+          String userName2 = "";
+          if (loginDataStr2 != null) {
+            final ld = jsonDecode(loginDataStr2);
+            userName2 = ld['name']?.toString() ?? ld['userName']?.toString() ?? "";
+          }
+          final localKey = 'local_attendance_$rawId';
+          final existing = prefs2.getString(localKey);
+          List<dynamic> records = existing != null ? jsonDecode(existing) : [];
+          final now = DateTime.now();
+          final todayStr = '${now.month}/${now.day}/${now.year}';
+          final timeStr = '${now.hour > 12 ? now.hour - 12 : now.hour == 0 ? 12 : now.hour}:${now.minute.toString().padLeft(2,'0')}:${now.second.toString().padLeft(2,'0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
+          int todayIdx = records.indexWhere((r) => r['date'] == todayStr);
+          if (_checkType == 'In') {
+            if (todayIdx >= 0) {
+              records[todayIdx]['checkInTime'] = timeStr;
+              records[todayIdx]['checkOutTime'] = null;
+              records[todayIdx]['workingHours'] = null;
+            } else {
+              records.insert(0, {
+                'userName': userName2,
+                'checkType': 'check-in',
+                'locationName': _selectedLocationName ?? "",
+                'date': todayStr,
+                'checkInTime': timeStr,
+                'checkOutTime': null,
+                'workingHours': null,
+              });
+            }
+          } else {
+            // Out - حفظ وقت الانصراف وحساب ساعات العمل
+            if (todayIdx >= 0) {
+              records[todayIdx]['checkOutTime'] = timeStr;
+              // ✅ احسب ساعات العمل
+              try {
+                final String? inTimeStr = records[todayIdx]['checkInTime'];
+                if (inTimeStr != null) {
+                  // parse وقت الحضور
+                  final inParts = inTimeStr.replaceAll(' AM', '').replaceAll(' PM', '').split(':');
+                  final isPM_in = inTimeStr.contains('PM');
+                  int inH = int.parse(inParts[0]);
+                  int inM = int.parse(inParts[1]);
+                  int inS = int.parse(inParts[2]);
+                  if (isPM_in && inH != 12) inH += 12;
+                  if (!isPM_in && inH == 12) inH = 0;
+
+                  // parse وقت الانصراف
+                  final outParts = timeStr.replaceAll(' AM', '').replaceAll(' PM', '').split(':');
+                  final isPM_out = timeStr.contains('PM');
+                  int outH = int.parse(outParts[0]);
+                  int outM = int.parse(outParts[1]);
+                  int outS = int.parse(outParts[2]);
+                  if (isPM_out && outH != 12) outH += 12;
+                  if (!isPM_out && outH == 12) outH = 0;
+
+                  final inTotal = inH * 3600 + inM * 60 + inS;
+                  final outTotal = outH * 3600 + outM * 60 + outS;
+                  final diffSecs = outTotal - inTotal;
+
+                  if (diffSecs > 0) {
+                    final hh = (diffSecs ~/ 3600).toString().padLeft(2, '0');
+                    final mm = ((diffSecs % 3600) ~/ 60).toString().padLeft(2, '0');
+                    final ss = (diffSecs % 60).toString().padLeft(2, '0');
+                    records[todayIdx]['workingHours'] = '$hh:$mm:$ss';
+                  }
+                }
+              } catch (e) {
+                debugPrint('Working hours calc error: $e');
+              }
+            } else {
+              // مفيش record لنفس اليوم - سجل الـ Out بس
+              records.insert(0, {
+                'userName': userName2,
+                'checkType': 'check-out',
+                'locationName': _selectedLocationName ?? "",
+                'date': todayStr,
+                'checkInTime': null,
+                'checkOutTime': timeStr,
+                'workingHours': null,
+              });
+            }
+          }
+          if (records.length > 90) records = records.sublist(0, 90);
+          await prefs2.setString(localKey, jsonEncode(records));
+        } catch (e) {
+          debugPrint('Local save error: $e');
+        }
+
+        _showSnackBar(
+          _checkType == "In" ? "✅ تم تسجيل الحضور بنجاح" : "✅ تم تسجيل الانصراف بنجاح",
+          Colors.green,
+        );
+
+        // ── حفظ الحالة محلياً فوراً بعد النجاح ──
+        try {
+          final prefs3 = await SharedPreferences.getInstance();
+          final String todayStr2 = intl.DateFormat('yyyy-MM-dd').format(DateTime.now());
+          if (_checkType == "In") {
+            // سجل حضور → الخطوة القادمة انصراف
+            await prefs3.setString('attendance_date_$rawId', todayStr2);
+            await prefs3.setString('attendance_checktype_$rawId', "Out");
+            await prefs3.setString('attendance_location_$rawId', _selectedLocationName ?? "");
+          } else {
+            // سجل انصراف → اليوم خلص
+            await prefs3.setString('attendance_date_$rawId', todayStr2);
+            await prefs3.setString('attendance_checktype_$rawId', "Done");
+          }
+        } catch (e) {
+          debugPrint('State save error: $e');
+        }
+
         setState(() {
           if (_checkType == "In") {
             _attendanceDone = true;
@@ -274,11 +457,11 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
           }
         });
       } else {
-        // لعرض السبب في حالة وجود خطأ آخر
-        print("Response: ${response.body}");
-        _showSnackBar("فشل التسجيل: تأكد من البيانات", Colors.red);
+        print("FAILED - Status: ${response.statusCode} | Body: ${response.body}");
+        _showSnackBar("فشل التسجيل (${response.statusCode})", Colors.red);
       }
     } catch (e) {
+      print("EXCEPTION: $e");
       _showSnackBar("حدث خطأ تقني: $e", Colors.red);
     } finally {
       setState(() => _isLoading = false);
@@ -295,54 +478,46 @@ class _MainAttendanceScreenState extends State<MainAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // بدون Scaffold أو AppBar — التحكم في الـ AppBar عند الـ TeacherHomeScreen
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-            title: Text("  ", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontFamily: 'Almarai')),
-            backgroundColor: Colors.white,
-            elevation: 0,
-            centerTitle: true
-        ),
-        body: _isLoadingStatus
-            ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
-            : RefreshIndicator(
-          onRefresh: () async {
-            await _initLocation();
-            await _fetchOffices();
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-                    border: Border.all(color: kBorderColor),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildMiniRow(Icons.location_on, _currentLocationText),
-                      const Divider(height: 25, color: kBorderColor),
-                      _buildMiniRow(Icons.access_time_filled, "ساعات العمل: 00:00 ص - 00:00 م"),
-                    ],
-                  ),
+      child: _isLoadingStatus
+          ? const Center(child: CircularProgressIndicator(color: kActiveBlue))
+          : RefreshIndicator(
+        onRefresh: () async {
+          await _initLocation();
+          await _fetchOffices();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                  border: Border.all(color: kBorderColor),
                 ),
-                const SizedBox(height: 20),
-                _buildModernDropdown(),
-                const SizedBox(height: 40),
-                Text(_currentTime, style: TextStyle(fontSize: 50, fontWeight: FontWeight.bold, color: darkBlue, fontFamily: 'Almarai')),
-                const SizedBox(height: 40),
-                _buildFingerprintButton(),
-                const SizedBox(height: 20),
-                if (_isLoading) const Padding(padding: EdgeInsets.only(top: 15), child: CircularProgressIndicator(color: kActiveBlue))
-              ],
-            ),
+                child: Column(
+                  children: [
+                    _buildMiniRow(Icons.location_on, _currentLocationText),
+                    const Divider(height: 25, color: kBorderColor),
+                    _buildMiniRow(Icons.access_time_filled, "ساعات العمل: 00:00 ص - 00:00 م"),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildModernDropdown(),
+              const SizedBox(height: 40),
+              Text(_currentTime, style: TextStyle(fontSize: 50, fontWeight: FontWeight.bold, color: darkBlue, fontFamily: 'Almarai')),
+              const SizedBox(height: 40),
+              _buildFingerprintButton(),
+              const SizedBox(height: 20),
+              if (_isLoading) const Padding(padding: EdgeInsets.only(top: 15), child: CircularProgressIndicator(color: kActiveBlue))
+            ],
           ),
         ),
       ),

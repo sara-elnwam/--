@@ -336,6 +336,7 @@ class _LevelOneScreenState extends State<LevelOneScreen> {
                             InkWell(
                               // داخل DataCell في LevelOneScreen
                               onTap: () {
+                                // عند الضغط على المجموعة للانتقال
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -343,8 +344,8 @@ class _LevelOneScreenState extends State<LevelOneScreen> {
                                       groupId: group['id'],
                                       levelId: widget.levelId,
                                       groupName: group['name'],
-                                      // نأخذ اسم الشيخ مباشرة من الـ Object الخاص بالمجموعة
                                       teacherName: group['emp']?['name'] ?? "غير محدد",
+                                      teacherId: group['emp']?['id'] ?? group['empId'] ?? 0,
                                     ),
                                   ),
                                 );
